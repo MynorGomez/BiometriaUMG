@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <h2 class="mb-0"><i class="bi bi-house"></i> Mi Dashboard</h2>
+            <p class="text-muted">Bienvenido, {{ usuario.nombre }} {{ usuario.apellido }}</p>
+        </div>
+        <div class="col-lg-4 text-end">
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">
+                <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+            </a>
+        </div>
+    </div>
+
+    <!-- Tarjetas de Resumen -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="bi bi-book" style="font-size: 2rem; color: #0d6efd;"></i>
+                    <h6 class="mt-3 text-muted">Cursos Inscritos</h6>
+                    <h2 class="mb-0">{{ cursos|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="bi bi-calendar-check" style="font-size: 2rem; color: #198754;"></i>
+                    <h6 class="mt-3 text-muted">Asistencia</h6>
+                    <h2 class="mb-0">Ver →</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="bi bi-clock" style="font-size: 2rem; color: #fd7e14;"></i>
+                    <h6 class="mt-3 text-muted">Horarios</h6>
+                    <h2 class="mb-0">Ver →</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mis Cursos -->
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-book-fill"></i> Mis Cursos</h5>
+        </div>
+        <div class="card-body">
+            {% if cursos %}
+                <div class="row">
+                    {% for curso in cursos %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card border-primary h-100">
+                            <div class="card-body">
+                                <h6 class="card-title">{{ curso.curso }}</h6>
+                                <p class="text-muted mb-2">
+                                    <strong>Carrera:</strong> {{ curso.carrera }}<br>
+                                    <strong>Sección:</strong> {{ curso.seccion }}
+                                </p>
+                                <a href="{{ url_for('estudiante_curso_detalle', id_curso=curso.id_curso) }}" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-arrow-right"></i> Ver Detalles
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> No tienes cursos inscritos
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Acciones Rápidas -->
+    <div class="mt-4">
+        <a href="{{ url_for('estudiante_horarios') }}" class="btn btn-lg btn-outline-primary me-2">
+            <i class="bi bi-calendar3"></i> Ver Mis Horarios
+        </a>
+        <a href="{{ url_for('estudiante_asistencia') }}" class="btn btn-lg btn-outline-success">
+            <i class="bi bi-clipboard-check"></i> Ver Mi Asistencia
+        </a>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0"><i class="bi bi-person-circle"></i> Detalles de Persona</h2>
+            <a href="{{ url_for('personas_list') }}" class="btn btn-sm btn-secondary mt-2">
+                <i class="bi bi-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Datos Personales -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Información Personal</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Carnet</label>
+                        <p class="h6"><span class="badge bg-info">{{ persona.carnet or 'N/A' }}</span></p>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Nombre</label>
+                            <p class="h6">{{ persona.nombre }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Apellido</label>
+                            <p class="h6">{{ persona.apellido }}</p>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted">DPI</label>
+                        <p class="h6">{{ persona.dpi or 'No registrado' }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Teléfono</label>
+                        <p class="h6">{{ persona.telefono or 'No registrado' }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Correo Institucional</label>
+                        <p class="h6">{{ persona.correo_institucional or 'No registrado' }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Correo Personal</label>
+                        <p class="h6">{{ persona.correo_personal or 'No registrado' }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Estado</label>
+                        <p class="h6">
+                            {% if persona.estado == 'activo' %}
+                                <span class="badge bg-success">Activo</span>
+                            {% elif persona.estado == 'inactivo' %}
+                                <span class="badge bg-secondary">Inactivo</span>
+                            {% else %}
+                                <span class="badge bg-danger">Restringido</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Registrado</label>
+                        <p class="h6">{{ persona.fecha_registro.strftime('%d/%m/%Y %H:%M') if persona.fecha_registro else 'N/A' }}</p>
+                    </div>
+                    <a href="{{ url_for('persona_edit', id_persona=persona.id_persona) }}" class="btn btn-warning">
+                        <i class="bi bi-pencil"></i> Editar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cuenta de Usuario -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-shield-lock"></i> Cuenta de Usuario</h5>
+                </div>
+                <div class="card-body">
+                    {% if user_account %}
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Usuario</label>
+                            <p class="h6">{{ user_account.username }}</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Último Acceso</label>
+                            <p class="h6">{{ user_account.ultimo_login.strftime('%d/%m/%Y %H:%M') if user_account.ultimo_login else 'Nunca' }}</p>
+                        </div>
+                        <form method="post" action="{{ url_for('usuario_change_password', id_usuario=user_account.id_usuario) }}" class="mb-3">
+                            <div class="mb-3">
+                                <label class="form-label">Nueva Contraseña</label>
+                                <input type="password" name="new_password" class="form-control" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-key"></i> Cambiar Contraseña
+                            </button>
+                        </form>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Esta persona no tiene usuario creado
+                        </div>
+                        <a href="{{ url_for('usuario_create') }}" class="btn btn-success">
+                            <i class="bi bi-plus-circle"></i> Crear Usuario
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Roles -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-briefcase"></i> Roles</h5>
+                </div>
+                <div class="card-body">
+                    {% if persona.roles %}
+                        <div class="list-group">
+                            {% for rol in persona.roles %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span class="badge bg-secondary">{{ rol.nombre }}</span>
+                                <form method="post" action="{{ url_for('persona_remove_role', id_persona=persona.id_persona, id_rol_persona=rol.id_rol_persona) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Remover este rol?');">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted">Sin roles asignados</p>
+                    {% endif %}
+
+                    <hr>
+                    <form method="post" action="{{ url_for('persona_add_role', id_persona=persona.id_persona) }}">
+                        <div class="mb-2">
+                            <label class="form-label">Agregar Rol</label>
+                            <select name="id_rol" class="form-select" required>
+                                <option value="">-- Seleccionar --</option>
+                                {% for rol in roles_list %}
+                                <option value="{{ rol.id_rol }}">{{ rol.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-sm">
+                            <i class="bi bi-plus"></i> Asignar Rol
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

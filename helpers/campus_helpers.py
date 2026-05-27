@@ -31,31 +31,9 @@ def get_seccion_options(id_sede=None, carrera=None):
     if not carrera:
         return []
 
-    id_carrera = get_carrera_id(carrera)
-    if not id_carrera:
-        return []
-
-    try:
-        id_sede = int(id_sede) if id_sede is not None else None
-    except Exception:
-        return []
-
     conn = get_db_connection()
     cursor = conn.cursor()
-    if id_sede:
-        cursor.execute(
-            """
-            SELECT s.nombre
-            FROM secciones s
-            JOIN sede_carrera sc ON s.id_sede_carrera = sc.id_sede_carrera
-            WHERE s.id_carrera = %s AND sc.id_sede = %s
-            ORDER BY s.nombre
-            """,
-            (id_carrera, id_sede)
-        )
-    else:
-        cursor.execute("SELECT nombre FROM secciones WHERE id_carrera = %s ORDER BY nombre", (id_carrera,))
-
+    cursor.execute("SELECT nombre FROM secciones ORDER BY nombre")
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -156,10 +134,10 @@ def get_sede_carrera_id(id_sede, carrera):
     return row[0] if row else None
 
 
-def get_seccion_id(seccion, id_carrera):
+def get_seccion_id(seccion, id_carrera=None):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id_seccion FROM secciones WHERE nombre = %s AND id_carrera = %s", (seccion, id_carrera))
+    cursor.execute("SELECT id_seccion FROM secciones WHERE nombre = %s", (seccion,))
     row = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -186,3 +164,13 @@ def is_valid_sede(id_sede):
     cursor.close()
     conn.close()
     return valid
+
+
+def get_jornadas_options():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT id_jornada, nombre FROM jornadas ORDER BY nombre")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows or []

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{% if salon %}Editar{% else %}Nuevo{% endif %} Salón</h2>
+<form method="post">
+<div class="mb-3">
+<label class="form-label">Nombre</label>
+<input class="form-control" name="nombre" value="{{ salon.nombre if salon else '' }}">
+</div>
+<div class="mb-3">
+<label class="form-label">Código</label>
+<input class="form-control" name="codigo" value="{{ salon.codigo if salon else '' }}">
+</div>
+<div class="mb-3">
+<label class="form-label">Ubicación</label>
+<input class="form-control" name="ubicacion" value="{{ salon.ubicacion if salon else '' }}">
+</div>
+<div class="mb-3">
+<label class="form-label">Descripción</label>
+<textarea class="form-control" name="descripcion">{{ salon.descripcion if salon else '' }}</textarea>
+</div>
+<button class="btn btn-primary" type="submit">Guardar</button>
+</form>
+{% endblock %}

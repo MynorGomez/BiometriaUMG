@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Nuevo Horario</h2>
+<form method="post">
+<div class="mb-3">
+<label class="form-label">Asignación (opcional)</label>
+<select name="id_asignacion" class="form-select">
+<option value="">-- Ninguna --</option>
+{% for a in asignaciones %}
+<option value="{{ a.id_asignacion }}">{{ a.id_asignacion }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="mb-3">
+<label class="form-label">Día</label>
+<input class="form-control" name="dia" placeholder="LUN|MAR|MIE|JUE|VIE|SAB|DOM">
+</div>
+<div class="mb-3">
+<label class="form-label">Hora inicio (HH:MM)</label>
+<input class="form-control" name="hora_inicio" placeholder="08:00">
+</div>
+<div class="mb-3">
+<label class="form-label">Hora fin (HH:MM)</label>
+<input class="form-control" name="hora_fin" placeholder="09:30">
+</div>
+<div class="mb-3">
+<label class="form-label">Salón (opcional)</label>
+<select name="id_salon" class="form-select">
+<option value="">-- Ninguno --</option>
+{% for s in salones %}
+<option value="{{ s.id_salon }}">{{ s.nombre }}</option>
+{% endfor %}
+</select>
+</div>
+<button class="btn btn-primary" type="submit">Guardar</button>
+</form>
+{% endblock %}

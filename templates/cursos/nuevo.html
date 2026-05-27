@@ -59,6 +59,16 @@
                     </select>
                 </div>
 
+                <div class="mb-3">
+                    <label class="form-label">Jornada</label>
+                    <select name="id_jornada" class="form-select" required>
+                        <option value="">Seleccione una jornada</option>
+                        {% for jornada in jornadas_options %}
+                        <option value="{{ jornada.id_jornada }}" {{ 'selected' if form_data is defined and form_data.get('id_jornada') == jornada.id_jornada|string else '' }}>{{ jornada.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
                 <button type="submit" class="btn btn-success">Asignar curso</button>
                 <a href="{{ url_for('listar_cursos') }}" class="btn btn-secondary">Cancelar</a>
 

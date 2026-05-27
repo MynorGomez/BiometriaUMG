@@ -1,67 +1,106 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h2 class="mb-4">Panel Administrativo</h2>
+<div class="container-fluid">
+    <h2 class="mb-4"><i class="bi bi-speedometer2"></i> Panel Administrativo</h2>
 
-<hr class="my-4">
+    <!-- Estadísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-primary shadow">
+                <div class="card-body text-center">
+                    <i class="bi bi-people" style="font-size: 2.5rem;"></i>
+                    <h6 class="mt-3 mb-1">Total Personas</h6>
+                    <h3 class="mb-0">{{ stats.total_personas }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-success shadow">
+                <div class="card-body text-center">
+                    <i class="bi bi-book" style="font-size: 2.5rem;"></i>
+                    <h6 class="mt-3 mb-1">Estudiantes</h6>
+                    <h3 class="mb-0">{{ stats.total_estudiantes }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-info shadow">
+                <div class="card-body text-center">
+                    <i class="bi bi-person-badge" style="font-size: 2.5rem;"></i>
+                    <h6 class="mt-3 mb-1">Docentes</h6>
+                    <h3 class="mb-0">{{ stats.total_docentes }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-warning shadow">
+                <div class="card-body text-center">
+                    <i class="bi bi-door" style="font-size: 2.5rem;"></i>
+                    <h6 class="mt-3 mb-1">Cursos</h6>
+                    <h3 class="mb-0">{{ stats.total_cursos }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
 
-<div class="card p-4 shadow-sm">
-    <h4>Gestionar Roles (últimas personas)</h4>
+    <hr class="my-4">
 
-    <table class="table table-sm mt-3">
-        <thead>
-            <tr>
-                <th>Carnet</th>
-                <th>Nombre</th>
-                <th>Roles activos</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for p in recent_personas %}
-            <tr>
-                <td>{{ p.carnet or '-' }}</td>
-                <td>{{ p.nombre }} {{ p.apellido }}</td>
-                <td>
-                    {% if p.active_roles and p.active_roles|length > 0 %}
-                        {% for r in p.active_roles %}
-                            <div class="badge bg-secondary me-1">
-                                {{ r.tipo_persona }}
-                                {% if r.carrera_nombre %} - {{ r.carrera_nombre }}{% endif %}
-                                {% if r.seccion_nombre %} / {{ r.seccion_nombre }}{% endif %}
-                                <form method="post" action="{{ url_for('end_role_persona', id_persona=p.id_persona, id_rol=r.id_rol_persona) }}" style="display:inline;">
-                                    <button class="btn btn-sm btn-outline-light ms-2" type="submit">Finalizar</button>
-                                </form>
-                            </div>
+    <!-- Personas Recientes -->
+    <div class="card p-4 shadow-sm">
+        <h4 class="mb-3">Personas Registradas Recientemente</h4>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Carnet</th>
+                        <th>Nombre Completo</th>
+                        <th>Roles</th>
+                        <th>Registrado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if recent_personas %}
+                        {% for p in recent_personas %}
+                        <tr>
+                            <td><span class="badge bg-info">{{ p.carnet or '-' }}</span></td>
+                            <td><strong>{{ p.nombre }} {{ p.apellido }}</strong></td>
+                            <td>
+                                {% if p.roles %}
+                                    {% for r in p.roles %}
+                                    <span class="badge bg-success">{{ r.nombre }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="badge bg-secondary">Sin rol</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if p.fecha_registro %}
+                                    {{ p.fecha_registro.strftime('%d/%m/%Y') }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('persona_detail', id_persona=p.id_persona) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{{ url_for('persona_edit', id_persona=p.id_persona) }}" class="btn btn-sm btn-outline-warning">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </td>
+                        </tr>
                         {% endfor %}
                     {% else %}
-                        <em>Sin roles activos</em>
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">No hay personas registradas recientemente</td>
+                        </tr>
                     {% endif %}
-                </td>
-                <td>
-                    <!-- Formulario promover -->
-                    <form method="post" action="{{ url_for('promover_persona', id_persona=p.id_persona) }}" class="d-inline">
-                        <select name="nuevo_rol" class="form-select form-select-sm d-inline-block" style="width:auto;">
-                            <option value="catedratico">Catedrático</option>
-                            <option value="administrativo">Administrativo</option>
-                            <option value="estudiante">Estudiante</option>
-                        </select>
-                        <select name="carrera" class="form-select form-select-sm d-inline-block ms-1" style="width:auto;">
-                            <option value="">-- Carrera --</option>
-                            {% for c in carrera_options %}
-                                <option value="{{ c }}" {% if p.active_roles and p.active_roles|length>0 and p.active_roles[0].carrera_nombre==c %}selected{% endif %}>{{ c }}</option>
-                            {% endfor %}
-                        </select>
-                        <input type="hidden" name="seccion" value="{% if p.active_roles and p.active_roles|length>0 %}{{ p.active_roles[0].seccion_nombre or '' }}{% else %}{% endif %}">
-                        <input type="hidden" name="crear_usuario" value="0">
-                        <button class="btn btn-sm btn-primary ms-1" type="submit">Promover</button>
-                    </form>
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 {% endblock %}

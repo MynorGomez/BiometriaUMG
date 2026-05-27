@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Salones</h2>
+<a class="btn btn-primary mb-3" href="{{ url_for('admin_salones_nuevo') }}">Nuevo salón</a>
+<table class="table table-sm">
+<thead><tr><th>ID</th><th>Nombre</th><th>Código</th><th>Ubicación</th><th>Acciones</th></tr></thead>
+<tbody>
+{% for s in salones %}
+<tr>
+<td>{{ s.id_salon }}</td>
+<td>{{ s.nombre }}</td>
+<td>{{ s.codigo or '-' }}</td>
+<td>{{ s.ubicacion or '-' }}</td>
+<td>
+<a class="btn btn-sm btn-secondary" href="{{ url_for('admin_salones_editar', id_salon=s.id_salon) }}">Editar</a>
+<form method="post" action="{{ url_for('admin_salones_eliminar', id_salon=s.id_salon) }}" style="display:inline;" onsubmit="return confirm('Eliminar salón?');">
+<button class="btn btn-sm btn-danger">Eliminar</button>
+</form>
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

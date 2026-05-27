@@ -1,17 +1,21 @@
 from datetime import datetime, date
-from flask import render_template, request, redirect, url_for, session, flash
+from flask import render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import generate_password_hash
 
 from database import get_db_connection
 from helpers import (
     obtener_usuario_sesion,
     get_carrera_options,
-    get_carrera_id,
-    get_seccion_id,
+    get_seccion_options,
     get_carreras_for_sede,
+    get_cursos_for_sede_carrera,
+    get_sede_carrera_id,
+    get_seccion_id,
+    get_carrera_id,
     get_sede_options,
-    is_valid_sede,
+    get_rol_id_by_name
 )
+import models
 
 
 def register_admin_routes(app):
@@ -19,47 +23,40 @@ def register_admin_routes(app):
     def dashboard_admin():
         if session.get('rol') != 'administrativo':
             return redirect(url_for('login'))
+        
+        usuario = obtener_usuario_sesion()
+        stats = models.get_dashboard_stats()
+        
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        usuario = obtener_usuario_sesion()
-        cursor.execute('SELECT COUNT(*) AS total FROM personas')
-        total_personas = cursor.fetchone()['total']
-        cursor.execute("SELECT COUNT(DISTINCT id_persona) AS total FROM roles_persona WHERE tipo_persona='catedratico' AND activo = 1")
-        total_docentes = cursor.fetchone()['total']
-        cursor.execute("SELECT COUNT(DISTINCT id_persona) AS total FROM roles_persona WHERE tipo_persona='administrativo' AND activo = 1")
-        total_admins = cursor.fetchone()['total']
-        cursor.execute("SELECT COUNT(DISTINCT id_persona) AS total FROM roles_persona WHERE tipo_persona='estudiante' AND activo = 1")
-        total_estudiantes = cursor.fetchone()['total']
-        cursor.execute("SELECT p.id_persona, p.nombre, p.apellido, p.carnet FROM personas p WHERE p.estado = 'activo' ORDER BY p.id_persona DESC LIMIT 10")
+        cursor.execute("""
+            SELECT p.id_persona, p.nombre, p.apellido, p.carnet, p.estado, p.fecha_registro
+            FROM personas p
+            WHERE p.estado = 'activo'
+            ORDER BY p.fecha_registro DESC
+            LIMIT 15
+        """)
         recent_personas = cursor.fetchall()
-        cursor.close()
-
+        
+        # Obtener roles de cada persona
         for p in recent_personas:
-            cursor = conn.cursor(dictionary=True)
             cursor.execute("""
-                SELECT r.id_rol_persona, r.tipo_persona, r.id_carrera, r.id_seccion,
-                       c.nombre AS carrera_nombre, s.nombre AS seccion_nombre
-                FROM roles_persona r
-                LEFT JOIN carreras c ON r.id_carrera = c.id_carrera
-                LEFT JOIN secciones s ON r.id_seccion = s.id_seccion
-                WHERE r.id_persona=%s AND r.activo=1
+                SELECT DISTINCT r.id_rol, r.nombre as tipo_persona
+                FROM roles_persona rp
+                JOIN roles r ON rp.id_rol = r.id_rol
+                WHERE rp.id_persona = %s
             """, (p['id_persona'],))
-            roles = cursor.fetchall()
-            cursor.close()
-            p['active_roles'] = roles if roles else []
-
-        carrera_options = get_carrera_options()
+            p['roles'] = cursor.fetchall()
+        
+        cursor.close()
         conn.close()
-
+        
         return render_template(
             'admin.html',
             usuario=usuario,
-            total_personas=total_personas,
-            total_docentes=total_docentes,
-            total_admins=total_admins,
-            total_estudiantes=total_estudiantes,
+            stats=stats,
             recent_personas=recent_personas,
-            carrera_options=carrera_options
+            carrera_options=get_carrera_options()
         )
 
     @app.route('/personas/<int:id_persona>/promover', methods=['POST'])
@@ -68,8 +65,6 @@ def register_admin_routes(app):
             return redirect(url_for('login'))
 
         nuevo_rol = request.form.get('nuevo_rol')
-        carrera = request.form.get('carrera')
-        seccion = request.form.get('seccion')
         crear_usuario = request.form.get('crear_usuario') == '1'
         username = request.form.get('username')
         password = request.form.get('password')
@@ -77,22 +72,39 @@ def register_admin_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute("UPDATE roles_persona SET activo=0, fecha_fin=%s WHERE id_persona=%s AND activo=1", (date.today(), id_persona))
-            id_carrera = get_carrera_id(carrera) if carrera else None
-            id_seccion = get_seccion_id(seccion, id_carrera) if id_carrera and seccion else None
-            cursor.execute(
-                "INSERT INTO roles_persona (id_persona, tipo_persona, carnet, id_carrera, id_seccion, id_sede, fecha_inicio, activo) VALUES (%s, %s, %s, %s, %s, %s, %s, 1)",
-                (id_persona, nuevo_rol, None, id_carrera, id_seccion, None, date.today())
-            )
+            rp_cols = get_roles_persona_schema()
+            if 'activo' in rp_cols:
+                cursor.execute("UPDATE roles_persona SET activo=0, fecha_fin=%s WHERE id_persona=%s AND activo=1", (date.today(), id_persona))
+
+            if 'id_rol' in rp_cols:
+                id_rol = get_rol_id_by_name(nuevo_rol)
+                if not id_rol:
+                    raise ValueError(f"Rol desconocido: {nuevo_rol}")
+                cursor.execute(
+                    "INSERT INTO roles_persona (id_persona, id_rol) VALUES (%s, %s)",
+                    (id_persona, id_rol)
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO roles_persona (id_persona, tipo_persona, carnet, id_carrera, id_seccion, id_sede, fecha_inicio, activo) VALUES (%s, %s, %s, %s, %s, %s, %s, 1)",
+                    (id_persona, nuevo_rol, None, None, None, None, date.today())
+                )
+
             if crear_usuario and nuevo_rol in ('catedratico', 'administrativo'):
                 if not username:
-                    cursor.execute("SELECT correo FROM personas WHERE id_persona=%s", (id_persona,))
+                    cursor.execute(
+                        "SELECT COALESCE(correo_institucional, correo_personal) AS correo FROM personas WHERE id_persona=%s",
+                        (id_persona,)
+                    )
                     rr = cursor.fetchone()
                     username = rr[0] if rr else f'user{id_persona}'
                 if not password:
                     password = '123456'
                 password_hash = generate_password_hash(password)
-                cursor.execute("INSERT INTO usuarios (id_persona, username, password, rol) VALUES (%s, %s, %s, %s)", (id_persona, username, password_hash, nuevo_rol))
+                cursor.execute(
+                    'INSERT INTO usuarios (id_persona, username, password) VALUES (%s, %s, %s)',
+                    (id_persona, username, password_hash)
+                )
             conn.commit()
             flash('Persona promovida correctamente.', 'success')
         except Exception as e:
@@ -110,22 +122,20 @@ def register_admin_routes(app):
             return redirect(url_for('login'))
 
         tipo_persona = request.form.get('tipo_persona')
-        carrera = request.form.get('carrera')
-        seccion = request.form.get('seccion')
-        id_sede = request.form.get('id_sede') or None
-
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute('SELECT carnet FROM personas WHERE id_persona=%s', (id_persona,))
-            row = cursor.fetchone()
-            carnet = row[0] if row else None
-            id_carrera = get_carrera_id(carrera) if carrera else None
-            id_seccion = get_seccion_id(seccion, id_carrera) if id_carrera and seccion else None
-            cursor.execute(
-                'INSERT INTO roles_persona (id_persona, tipo_persona, carnet, id_carrera, id_seccion, id_sede, fecha_inicio, activo) VALUES (%s, %s, %s, %s, %s, %s, %s, 1)',
-                (id_persona, tipo_persona, carnet, id_carrera, id_seccion, id_sede, datetime.now())
-            )
+            rp_cols = get_roles_persona_schema()
+            if 'id_rol' in rp_cols:
+                id_rol = get_rol_id_by_name(tipo_persona)
+                if not id_rol:
+                    raise ValueError(f"Rol desconocido: {tipo_persona}")
+                cursor.execute('INSERT INTO roles_persona (id_persona, id_rol) VALUES (%s, %s)', (id_persona, id_rol))
+            else:
+                cursor.execute(
+                    'INSERT INTO roles_persona (id_persona, tipo_persona, carnet, id_carrera, id_seccion, id_sede, fecha_inicio, activo) VALUES (%s, %s, %s, %s, %s, %s, %s, 1)',
+                    (id_persona, tipo_persona, None, None, None, None, datetime.now())
+                )
             conn.commit()
             flash('Rol añadido correctamente.', 'success')
         except Exception as e:
@@ -145,7 +155,11 @@ def register_admin_routes(app):
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute('UPDATE roles_persona SET activo=0, fecha_fin=%s WHERE id_rol_persona=%s AND id_persona=%s', (datetime.now(), id_rol, id_persona))
+            rp_cols = get_roles_persona_schema()
+            if 'activo' in rp_cols:
+                cursor.execute('UPDATE roles_persona SET activo=0, fecha_fin=%s WHERE id_rol_persona=%s AND id_persona=%s', (datetime.now(), id_rol, id_persona))
+            else:
+                cursor.execute('DELETE FROM roles_persona WHERE id_rol_persona=%s AND id_persona=%s', (id_rol, id_persona))
             conn.commit()
             flash('Rol finalizado correctamente.', 'success')
         except Exception as e:
@@ -170,9 +184,7 @@ def register_admin_routes(app):
             username = request.form.get('username')
             password = request.form.get('password')
             if id_persona and not rol:
-                cursor.execute('SELECT tipo_persona FROM roles_persona WHERE id_persona=%s AND activo=1 LIMIT 1', (id_persona,))
-                rr = cursor.fetchone()
-                rol = rr['tipo_persona'] if rr else None
+                rol = get_role_name(id_persona)
             if not (id_persona and rol and username and password):
                 flash('Todos los campos son obligatorios.', 'warning')
                 cursor.close()
@@ -180,12 +192,15 @@ def register_admin_routes(app):
                 return redirect(url_for('admin_crear_usuario'))
             try:
                 password_hash = generate_password_hash(password)
-                cursor.execute('INSERT INTO usuarios (id_persona, username, password, rol) VALUES (%s, %s, %s, %s)', (id_persona, username, password_hash, rol))
-                cursor.execute('UPDATE roles_persona SET activo=0, fecha_fin=%s WHERE id_persona=%s AND activo=1', (date.today(), id_persona))
-                cursor.execute('SELECT carnet FROM personas WHERE id_persona=%s', (id_persona,))
-                rr = cursor.fetchone()
-                carnet = rr['carnet'] if rr else None
-                cursor.execute('INSERT INTO roles_persona (id_persona, tipo_persona, carnet, fecha_inicio, activo) VALUES (%s, %s, %s, %s, 1)', (id_persona, rol, carnet, date.today()))
+                cursor.execute('INSERT INTO usuarios (id_persona, username, password) VALUES (%s, %s, %s)', (id_persona, username, password_hash))
+                rp_cols = get_roles_persona_schema()
+                if 'activo' in rp_cols:
+                    cursor.execute('UPDATE roles_persona SET activo=0, fecha_fin=%s WHERE id_persona=%s AND activo=1', (date.today(), id_persona))
+                if 'id_rol' not in rp_cols:
+                    cursor.execute('SELECT carnet FROM personas WHERE id_persona=%s', (id_persona,))
+                    rr = cursor.fetchone()
+                    carnet = rr['carnet'] if rr else None
+                    cursor.execute('INSERT INTO roles_persona (id_persona, tipo_persona, carnet, fecha_inicio, activo) VALUES (%s, %s, %s, %s, 1)', (id_persona, rol, carnet, date.today()))
                 conn.commit()
                 flash('Usuario y rol creados correctamente.', 'success')
                 cursor.close()
@@ -198,14 +213,27 @@ def register_admin_routes(app):
                 conn.close()
                 return redirect(url_for('admin_crear_usuario'))
 
-        cursor.execute("""
-            SELECT DISTINCT p.id_persona, p.nombre, p.apellido, p.carnet, r.tipo_persona AS rol_activo
-            FROM personas p
-            LEFT JOIN usuarios u ON p.id_persona = u.id_persona
-            JOIN roles_persona r ON p.id_persona = r.id_persona AND r.activo = 1
-            WHERE u.id_usuario IS NULL AND p.estado = 'activo' AND r.tipo_persona != 'estudiante'
-            ORDER BY p.nombre, p.apellido
-        """)
+        rp_cols = get_roles_persona_schema()
+        if 'id_rol' in rp_cols:
+            activo_clause = 'AND rp.activo = 1' if 'activo' in rp_cols else ''
+            cursor.execute(f"""
+                SELECT DISTINCT p.id_persona, p.nombre, p.apellido, p.carnet, r.nombre AS rol_activo
+                FROM personas p
+                LEFT JOIN usuarios u ON p.id_persona = u.id_persona
+                JOIN roles_persona rp ON p.id_persona = rp.id_persona {activo_clause}
+                JOIN roles r ON rp.id_rol = r.id_rol
+                WHERE u.id_usuario IS NULL AND p.estado = 'activo' AND r.nombre != 'estudiante'
+                ORDER BY p.nombre, p.apellido
+            """)
+        else:
+            cursor.execute("""
+                SELECT DISTINCT p.id_persona, p.nombre, p.apellido, p.carnet, r.tipo_persona AS rol_activo
+                FROM personas p
+                LEFT JOIN usuarios u ON p.id_persona = u.id_persona
+                JOIN roles_persona r ON p.id_persona = r.id_persona AND r.activo = 1
+                WHERE u.id_usuario IS NULL AND p.estado = 'activo' AND r.tipo_persona != 'estudiante'
+                ORDER BY p.nombre, p.apellido
+            """)
         personas = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -225,17 +253,28 @@ def register_admin_routes(app):
             like = f"%{q}%"
             cursor.execute("SELECT id_persona, nombre, apellido, carnet FROM personas WHERE (nombre LIKE %s OR apellido LIKE %s) AND estado='activo' ORDER BY nombre, apellido", (like, like))
             results = cursor.fetchall()
+            rp_cols = get_roles_persona_schema()
             for p in results:
                 cursor2 = conn.cursor(dictionary=True)
-                cursor2.execute("""
-                    SELECT r.id_rol_persona, r.tipo_persona, r.id_carrera, r.id_seccion,
-                           c.nombre AS carrera_nombre, s.nombre AS seccion_nombre, sd.nombre AS sede_nombre
-                    FROM roles_persona r
-                    LEFT JOIN carreras c ON r.id_carrera = c.id_carrera
-                    LEFT JOIN secciones s ON r.id_seccion = s.id_seccion
-                    LEFT JOIN sedes sd ON r.id_sede = sd.id_sede
-                    WHERE r.id_persona=%s AND r.activo=1
-                """, (p['id_persona'],))
+                if 'id_rol' in rp_cols:
+                    activo_clause = 'AND rp.activo = 1' if 'activo' in rp_cols else ''
+                    cursor2.execute(f"""
+                        SELECT rp.id_persona AS id_rol_persona, r.nombre AS tipo_persona, NULL AS id_carrera, NULL AS id_seccion,
+                               NULL AS carrera_nombre, NULL AS seccion_nombre, NULL AS sede_nombre
+                        FROM roles_persona rp
+                        JOIN roles r ON rp.id_rol = r.id_rol
+                        WHERE rp.id_persona=%s {activo_clause}
+                    """, (p['id_persona'],))
+                else:
+                    cursor2.execute("""
+                        SELECT r.id_rol_persona, r.tipo_persona, r.id_carrera, r.id_seccion,
+                               c.nombre AS carrera_nombre, s.nombre AS seccion_nombre, sd.nombre AS sede_nombre
+                        FROM roles_persona r
+                        LEFT JOIN carreras c ON r.id_carrera = c.id_carrera
+                        LEFT JOIN secciones s ON r.id_seccion = s.id_seccion
+                        LEFT JOIN sedes sd ON r.id_sede = sd.id_sede
+                        WHERE r.id_persona=%s AND r.activo=1
+                    """, (p['id_persona'],))
                 roles = cursor2.fetchall()
                 cursor2.close()
                 p['active_roles'] = roles if roles else []
@@ -250,7 +289,11 @@ def register_admin_routes(app):
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute('SELECT * FROM personas WHERE id_persona=%s', (id_persona,))
+        cursor.execute(
+            'SELECT p.*, COALESCE(p.correo_institucional, p.correo_personal) AS correo '
+            'FROM personas p WHERE p.id_persona=%s',
+            (id_persona,)
+        )
         persona = cursor.fetchone()
         if not persona:
             cursor.close()
@@ -258,15 +301,26 @@ def register_admin_routes(app):
             flash('Persona no encontrada', 'warning')
             return redirect(url_for('admin_roles'))
 
-        cursor.execute("""
-            SELECT r.id_rol_persona, r.tipo_persona, r.id_carrera, r.id_seccion,
-                   c.nombre AS carrera_nombre, s.nombre AS seccion_nombre, sd.nombre AS sede_nombre
-            FROM roles_persona r
-            LEFT JOIN carreras c ON r.id_carrera = c.id_carrera
-            LEFT JOIN secciones s ON r.id_seccion = s.id_seccion
-            LEFT JOIN sedes sd ON r.id_sede = sd.id_sede
-            WHERE r.id_persona=%s AND r.activo=1
-        """, (id_persona,))
+        rp_cols = get_roles_persona_schema()
+        if 'id_rol' in rp_cols:
+            activo_clause = 'AND rp.activo = 1' if 'activo' in rp_cols else ''
+            cursor.execute(f"""
+                SELECT rp.id_persona AS id_rol_persona, r.nombre AS tipo_persona, NULL AS id_carrera, NULL AS id_seccion,
+                       NULL AS carrera_nombre, NULL AS seccion_nombre, NULL AS sede_nombre
+                FROM roles_persona rp
+                JOIN roles r ON rp.id_rol = r.id_rol
+                WHERE rp.id_persona=%s {activo_clause}
+            """, (id_persona,))
+        else:
+            cursor.execute("""
+                SELECT r.id_rol_persona, r.tipo_persona, r.id_carrera, r.id_seccion,
+                       c.nombre AS carrera_nombre, s.nombre AS seccion_nombre, sd.nombre AS sede_nombre
+                FROM roles_persona r
+                LEFT JOIN carreras c ON r.id_carrera = c.id_carrera
+                LEFT JOIN secciones s ON r.id_seccion = s.id_seccion
+                LEFT JOIN sedes sd ON r.id_sede = sd.id_sede
+                WHERE r.id_persona=%s AND r.activo=1
+            """, (id_persona,))
         roles = cursor.fetchall()
 
         cursor.execute('SELECT id_sede, nombre FROM sedes ORDER BY nombre')
@@ -275,6 +329,336 @@ def register_admin_routes(app):
         conn.close()
 
         return render_template('admin_role_detail.html', persona=persona, active_roles=roles, carrera_options=get_carrera_options(), sedes=sedes)
+
+    # -------------------- Cámaras CRUD --------------------
+    @app.route('/admin/camaras')
+    def admin_camaras():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT cam_id, nombre, source, id_sede, descripcion FROM camaras ORDER BY cam_id')
+        cams = cursor.fetchall()
+        cursor.close(); conn.close()
+        return render_template('admin_camaras.html', camaras=cams)
+
+    @app.route('/admin/camaras/nuevo', methods=['GET', 'POST'])
+    def admin_camaras_nuevo():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor()
+        if request.method == 'POST':
+            cam_id = request.form.get('cam_id')
+            nombre = request.form.get('nombre')
+            source = request.form.get('source')
+            id_sede = request.form.get('id_sede') or None
+            descripcion = request.form.get('descripcion')
+            if not cam_id or not source:
+                flash('`cam_id` y `source` son obligatorios.', 'warning')
+                return redirect(url_for('admin_camaras_nuevo'))
+            try:
+                cursor.execute('INSERT INTO camaras (cam_id, nombre, source, id_sede, descripcion) VALUES (%s,%s,%s,%s,%s)', (cam_id, nombre, source, id_sede, descripcion))
+                conn.commit()
+                flash('Cámara creada.', 'success')
+                return redirect(url_for('admin_camaras'))
+            except Exception as e:
+                conn.rollback(); flash(f'Error: {e}', 'danger')
+        # GET
+        cursor.execute('SELECT id_sede, nombre FROM sedes ORDER BY nombre')
+        sedes = cursor.fetchall()
+        cursor.close(); conn.close()
+        return render_template('admin_camara_form.html', sedes=sedes)
+
+    @app.route('/admin/camaras/<cam_id>/editar', methods=['GET', 'POST'])
+    def admin_camaras_editar(cam_id):
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
+        if request.method == 'POST':
+            nombre = request.form.get('nombre')
+            source = request.form.get('source')
+            id_sede = request.form.get('id_sede') or None
+            descripcion = request.form.get('descripcion')
+            try:
+                cursor.execute('UPDATE camaras SET nombre=%s, source=%s, id_sede=%s, descripcion=%s WHERE cam_id=%s', (nombre, source, id_sede, descripcion, cam_id))
+                conn.commit(); flash('Cámara actualizada.', 'success')
+                return redirect(url_for('admin_camaras'))
+            except Exception as e:
+                conn.rollback(); flash(f'Error: {e}', 'danger')
+        cursor.execute('SELECT cam_id, nombre, source, id_sede, descripcion FROM camaras WHERE cam_id=%s', (cam_id,))
+        cam = cursor.fetchone()
+        cursor.execute('SELECT id_sede, nombre FROM sedes ORDER BY nombre')
+        sedes = cursor.fetchall()
+        cursor.close(); conn.close()
+        if not cam:
+            flash('Cámara no encontrada.', 'warning'); return redirect(url_for('admin_camaras'))
+        return render_template('admin_camara_form.html', cam=cam, sedes=sedes)
+
+    @app.route('/admin/camaras/<cam_id>/eliminar', methods=['POST'])
+    def admin_camaras_eliminar(cam_id):
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM camera_mappings WHERE cam_id=%s', (cam_id,))
+            cursor.execute('DELETE FROM camaras WHERE cam_id=%s', (cam_id,))
+            conn.commit(); flash('Cámara eliminada.', 'success')
+        except Exception as e:
+            conn.rollback(); flash(f'Error eliminando: {e}', 'danger')
+        finally:
+            cursor.close(); conn.close()
+        return redirect(url_for('admin_camaras'))
+
+    # -------------------- Salones CRUD --------------------
+    @app.route('/admin/salones')
+    def admin_salones():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT id_salon, nombre, codigo, ubicacion, descripcion, id_sede FROM salones ORDER BY nombre')
+        salones = cursor.fetchall()
+        cursor.close(); conn.close()
+        return render_template('admin_salones.html', salones=salones)
+
+    @app.route('/admin/salones/nuevo', methods=['GET', 'POST'])
+    def admin_salones_nuevo():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor()
+        if request.method == 'POST':
+            nombre = request.form.get('nombre')
+            codigo = request.form.get('codigo')
+            ubicacion = request.form.get('ubicacion')
+            descripcion = request.form.get('descripcion')
+            id_sede = request.form.get('id_sede') or None
+            if not nombre:
+                flash('El nombre es obligatorio.', 'warning'); return redirect(url_for('admin_salones_nuevo'))
+            try:
+                cursor.execute('INSERT INTO salones (nombre, codigo, ubicacion, descripcion, id_sede) VALUES (%s,%s,%s,%s,%s)', (nombre, codigo, ubicacion, descripcion, id_sede))
+                conn.commit(); flash('Salón creado.', 'success'); return redirect(url_for('admin_salones'))
+            except Exception as e:
+                conn.rollback(); flash(f'Error: {e}', 'danger')
+        cursor.close(); conn.close()
+        return render_template('admin_salon_form.html')
+
+    @app.route('/admin/salones/<int:id_salon>/editar', methods=['GET', 'POST'])
+    def admin_salones_editar(id_salon):
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
+        if request.method == 'POST':
+            nombre = request.form.get('nombre')
+            codigo = request.form.get('codigo')
+            ubicacion = request.form.get('ubicacion')
+            descripcion = request.form.get('descripcion')
+            id_sede = request.form.get('id_sede') or None
+            try:
+                cursor.execute('UPDATE salones SET nombre=%s, codigo=%s, ubicacion=%s, descripcion=%s, id_sede=%s WHERE id_salon=%s', (nombre, codigo, ubicacion, descripcion, id_sede, id_salon))
+                conn.commit(); flash('Salón actualizado.', 'success'); return redirect(url_for('admin_salones'))
+            except Exception as e:
+                conn.rollback(); flash(f'Error: {e}', 'danger')
+        cursor.execute('SELECT id_salon, nombre, codigo, ubicacion, descripcion, id_sede FROM salones WHERE id_salon=%s', (id_salon,))
+        salon = cursor.fetchone()
+        cursor.close(); conn.close()
+        if not salon:
+            flash('Salón no encontrado.', 'warning'); return redirect(url_for('admin_salones'))
+        return render_template('admin_salon_form.html', salon=salon)
+
+    @app.route('/admin/salones/<int:id_salon>/eliminar', methods=['POST'])
+    def admin_salones_eliminar(id_salon):
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM salones WHERE id_salon=%s', (id_salon,))
+            conn.commit(); flash('Salón eliminado.', 'success')
+        except Exception as e:
+            conn.rollback(); flash(f'Error eliminando: {e}', 'danger')
+        finally:
+            cursor.close(); conn.close()
+        return redirect(url_for('admin_salones'))
+
+    # -------------------- Camera Mappings CRUD --------------------
+    @app.route('/admin/camera_mappings')
+    def admin_camera_mappings():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
+        cursor.execute('''
+            SELECT cm.id, cm.cam_id, c.nombre AS cam_nombre,
+                   cm.id_salon, s.nombre AS salon_nombre,
+                   cm.id_sede_carrera,
+                   se.nombre AS sede_nombre, ca.nombre AS carrera_nombre,
+                   cm.id_seccion, sec.nombre AS seccion_nombre,
+                   cm.id_jornada, j.nombre AS jornada_nombre,
+                   cm.activo
+            FROM camera_mappings cm
+            LEFT JOIN camaras c ON cm.cam_id = c.cam_id
+            LEFT JOIN salones s ON cm.id_salon = s.id_salon
+            LEFT JOIN sede_carrera sc ON cm.id_sede_carrera = sc.id_sede_carrera
+            LEFT JOIN sedes se ON sc.id_sede = se.id_sede
+            LEFT JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+            LEFT JOIN secciones sec ON cm.id_seccion = sec.id_seccion
+            LEFT JOIN jornadas j ON cm.id_jornada = j.id_jornada
+            ORDER BY cm.id
+        ''')
+        maps = cursor.fetchall()
+        cursor.close(); conn.close()
+        return render_template('admin_camera_mappings.html', maps=maps)
+
+    @app.route('/admin/camera_mappings/nuevo', methods=['GET', 'POST'])
+    def admin_camera_mappings_nuevo():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
+        selected_sede = None
+        selected_carrera = None
+        selected_seccion = None
+        carreras = []
+        secciones = []
+        if request.method == 'POST':
+            cam_id = request.form.get('cam_id')
+            selected_sede = request.form.get('id_sede') or None
+            selected_carrera = request.form.get('carrera') or None
+            selected_seccion = request.form.get('seccion') or None
+            id_salon = request.form.get('id_salon') or None
+            id_jornada = request.form.get('id_jornada') or None
+            activo = 1 if request.form.get('activo') == '1' else 0
+            if selected_sede:
+                carreras = get_carreras_for_sede(selected_sede)
+            if selected_sede and selected_carrera:
+                secciones = get_seccion_options(selected_sede, selected_carrera)
+            id_sede_carrera = get_sede_carrera_id(selected_sede, selected_carrera) if selected_sede and selected_carrera else None
+            id_seccion = None
+            if selected_seccion and selected_carrera:
+                id_carrera = get_carrera_id(selected_carrera)
+                id_seccion = get_seccion_id(selected_seccion, id_carrera) if id_carrera else None
+            if not selected_sede:
+                flash('Debe seleccionar una sede.', 'warning')
+            elif not selected_carrera:
+                flash('Debe seleccionar una carrera.', 'warning')
+            elif not selected_seccion:
+                flash('Debe seleccionar una sección.', 'warning')
+            elif not id_sede_carrera:
+                flash('La combinación de sede y carrera no es válida.', 'warning')
+            elif selected_seccion and id_seccion is None:
+                flash('La sección seleccionada no es válida para la carrera y sede.', 'warning')
+            elif not id_salon:
+                flash('Debe seleccionar un salón.', 'warning')
+            elif not id_jornada:
+                flash('Debe seleccionar una jornada.', 'warning')
+            elif not cam_id:
+                flash('Debe seleccionar una cámara.', 'warning')
+            else:
+                try:
+                    cursor.execute('INSERT INTO camera_mappings (cam_id, id_salon, id_sede_carrera, id_seccion, id_jornada, activo) VALUES (%s,%s,%s,%s,%s,%s)', (cam_id, id_salon, id_sede_carrera, id_seccion, id_jornada, activo))
+                    conn.commit(); flash('Mapping creado.', 'success')
+                    cursor.close(); conn.close()
+                    return redirect(url_for('admin_camera_mappings'))
+                except Exception as e:
+                    conn.rollback(); flash(f'Error: {e}', 'danger')
+        cursor.execute('SELECT cam_id, nombre FROM camaras ORDER BY cam_id')
+        cams = cursor.fetchall()
+        cursor.execute('SELECT id_salon, nombre FROM salones ORDER BY nombre')
+        salones = cursor.fetchall()
+        cursor.execute('SELECT id_jornada, nombre FROM jornadas ORDER BY id_jornada')
+        jornadas = cursor.fetchall()
+        cursor.close(); conn.close()
+        return render_template(
+            'admin_camera_mapping_form.html',
+            cams=cams,
+            salones=salones,
+            jornadas=jornadas,
+            sedes=get_sede_options(),
+            carreras=carreras,
+            secciones=secciones,
+            selected_sede=selected_sede,
+            selected_carrera=selected_carrera,
+            selected_seccion=selected_seccion
+        )
+
+    @app.route('/admin/api/carreras_por_sede')
+    def api_carreras_por_sede():
+        id_sede = request.args.get('id_sede')
+        return jsonify({'carreras': get_carreras_for_sede(id_sede) if id_sede else []})
+
+    @app.route('/admin/api/cursos_por_sede_carrera')
+    def api_cursos_por_sede_carrera():
+        id_sede = request.args.get('id_sede')
+        carrera = request.args.get('carrera')
+        cursos = get_cursos_for_sede_carrera(id_sede, carrera) if id_sede and carrera else []
+        return jsonify({'cursos': [{'id_curso': c[0], 'nombre': c[1]} for c in cursos]})
+
+    @app.route('/admin/api/secciones_por_sede_carrera')
+    def api_secciones_por_sede_carrera():
+        id_sede = request.args.get('id_sede')
+        carrera = request.args.get('carrera')
+        secciones = get_seccion_options(id_sede, carrera) if id_sede and carrera else []
+        return jsonify({'secciones': secciones})
+
+    @app.route('/admin/camera_mappings/<int:id>/eliminar', methods=['POST'])
+    def admin_camera_mappings_eliminar(id):
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM camera_mappings WHERE id=%s', (id,))
+            conn.commit(); flash('Mapping eliminado.', 'success')
+        except Exception as e:
+            conn.rollback(); flash(f'Error eliminando: {e}', 'danger')
+        finally:
+            cursor.close(); conn.close()
+        return redirect(url_for('admin_camera_mappings'))
+
+    # -------------------- Horarios CRUD (básico) --------------------
+    @app.route('/admin/horarios')
+    def admin_horarios():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT h.id_horario, h.id_asignacion, h.dia, h.hora_inicio, h.hora_fin, h.id_salon FROM horarios h ORDER BY h.id_horario DESC')
+        horarios = cursor.fetchall()
+        cursor.close(); conn.close()
+        return render_template('admin_horarios.html', horarios=horarios)
+
+    @app.route('/admin/horarios/nuevo', methods=['GET', 'POST'])
+    def admin_horarios_nuevo():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
+        if request.method == 'POST':
+            id_asignacion = request.form.get('id_asignacion') or None
+            dia = request.form.get('dia')
+            hora_inicio = request.form.get('hora_inicio')
+            hora_fin = request.form.get('hora_fin')
+            id_salon = request.form.get('id_salon') or None
+            if not dia or not hora_inicio or not hora_fin:
+                flash('Día y horas son requeridos.', 'warning'); return redirect(url_for('admin_horarios_nuevo'))
+            try:
+                cursor.execute('INSERT INTO horarios (id_asignacion, dia, hora_inicio, hora_fin, id_salon) VALUES (%s,%s,%s,%s,%s)', (id_asignacion, dia, hora_inicio, hora_fin, id_salon))
+                conn.commit(); flash('Horario creado.', 'success'); return redirect(url_for('admin_horarios'))
+            except Exception as e:
+                conn.rollback(); flash(f'Error: {e}', 'danger')
+        cursor.execute('SELECT id_asignacion, id_curso, id_salon FROM asignacion_cursos ORDER BY id_asignacion')
+        asignaciones = cursor.fetchall()
+        cursor.execute('SELECT id_salon, nombre FROM salones ORDER BY nombre')
+        salones = cursor.fetchall()
+        cursor.close(); conn.close()
+        return render_template('admin_horario_form.html', asignaciones=asignaciones, salones=salones)
+
+    @app.route('/admin/horarios/<int:id_horario>/eliminar', methods=['POST'])
+    def admin_horarios_eliminar(id_horario):
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM horarios WHERE id_horario=%s', (id_horario,))
+            conn.commit(); flash('Horario eliminado.', 'success')
+        except Exception as e:
+            conn.rollback(); flash(f'Error eliminando: {e}', 'danger')
+        finally:
+            cursor.close(); conn.close()
+        return redirect(url_for('admin_horarios'))
 
     @app.route('/personas/<int:id_persona>/cambiar-carrera', methods=['POST'])
     def change_carrera_persona(id_persona):

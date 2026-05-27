@@ -21,6 +21,9 @@ from helpers import (
     is_valid_sede,
     limpiar_nombre,
     obtener_usuario_sesion,
+    get_roles_persona_schema,
+    get_rol_id_by_name,
+    get_jornadas_options,
 )
 from pdf_utils import generate_id_card_pdf, send_email_with_pdf
 
@@ -57,11 +60,13 @@ def register_registro_routes(app):
             tipo_persona = request.form['tipo_persona']
             carrera = request.form.get('carrera', '')
             seccion = request.form.get('seccion', '')
+            id_jornada = request.form.get('id_jornada', '')
             imagen_base64 = request.form.get('fotografia')
             firma = request.form.get('firma', '').strip()
             form_data = request.form.to_dict(flat=True)
             seccion_options = get_seccion_options(carrera) if carrera else []
             sede_options = get_sede_options()
+            jornadas_options = get_jornadas_options()
 
             if not is_valid_carrera(carrera):
                 flash('Carrera inválida. Seleccione una opción válida.', 'danger')
@@ -75,7 +80,7 @@ def register_registro_routes(app):
             if not is_valid_sede(sede):
                 flash('Sede inválida. Seleccione una opción válida.', 'danger')
                 form_data['fotografia'] = imagen_base64 or ''
-                return render_template('registrar.html', form_data=form_data, retake_photo=True, usuario=usuario, carrera_options=[], seccion_options=seccion_options, sede_options=sede_options)
+                return render_template('registrar.html', form_data=form_data, retake_photo=True, usuario=usuario, carrera_options=[], seccion_options=seccion_options, sede_options=sede_options, jornadas_options=jornadas_options)
             if not correo.endswith('@miumg.edu.gt'):
                 flash('Debe usar correo institucional @miumg.edu.gt', 'danger')
                 return redirect(url_for('registrar_persona'))
@@ -93,7 +98,10 @@ def register_registro_routes(app):
 
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
-            cursor.execute('SELECT COUNT(*) AS total FROM personas WHERE correo = %s', (correo,))
+            cursor.execute(
+                'SELECT COUNT(*) AS total FROM personas WHERE correo_personal = %s OR correo_institucional = %s',
+                (correo, correo)
+            )
             if cursor.fetchone()['total'] > 0:
                 cursor.close()
                 conn.close()
@@ -104,7 +112,7 @@ def register_registro_routes(app):
             cursor.close()
             cursor = conn.cursor()
             cursor.execute(
-                'INSERT INTO personas (nombre, apellido, telefono, correo, carnet, foto, firma) VALUES (%s, %s, %s, %s, %s, %s, %s)',
+                'INSERT INTO personas (nombre, apellido, telefono, correo_institucional, carnet, foto, firma) VALUES (%s, %s, %s, %s, %s, %s, %s)',
                 (nombre, apellido, telefono, correo, carnet, imagen_bytes, firma)
             )
             id_persona = cursor.lastrowid
@@ -112,10 +120,21 @@ def register_registro_routes(app):
             id_carrera = get_carrera_id(carrera)
             id_seccion = get_seccion_id(seccion, id_carrera) if id_carrera else None
             id_sede = int(request.form.get('sede')) if request.form.get('sede') else None
-            cursor.execute(
-                'INSERT INTO roles_persona (id_persona, tipo_persona, carnet, id_carrera, id_seccion, id_sede, fecha_inicio) VALUES (%s, %s, %s, %s, %s, %s, %s)',
-                (id_persona, tipo_persona, carnet, id_carrera, id_seccion, id_sede, date.today())
-            )
+            id_jornada_int = int(id_jornada) if id_jornada else None
+            rp_cols = get_roles_persona_schema()
+            if 'id_rol' in rp_cols:
+                id_rol = get_rol_id_by_name(tipo_persona)
+                if not id_rol:
+                    raise ValueError(f"Rol desconocido: {tipo_persona}")
+                if id_jornada_int:
+                    cursor.execute('INSERT INTO roles_persona (id_persona, id_rol, id_jornada) VALUES (%s, %s, %s)', (id_persona, id_rol, id_jornada_int))
+                else:
+                    cursor.execute('INSERT INTO roles_persona (id_persona, id_rol) VALUES (%s, %s)', (id_persona, id_rol))
+            else:
+                cursor.execute(
+                    'INSERT INTO roles_persona (id_persona, tipo_persona, carnet, id_carrera, id_seccion, id_sede, id_jornada, fecha_inicio) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
+                    (id_persona, tipo_persona, carnet, id_carrera, id_seccion, id_sede, id_jornada_int, date.today())
+                )
             conn.commit()
 
             nombre_limpio = limpiar_nombre(f"{nombre}_{apellido}")
@@ -170,7 +189,8 @@ def register_registro_routes(app):
                     usuario=usuario,
                     carrera_options=[],
                     seccion_options=get_seccion_options(carrera),
-                    sede_options=get_sede_options()
+                    sede_options=get_sede_options(),
+                    jornadas_options=get_jornadas_options()
                 )
 
             try:
@@ -191,4 +211,5 @@ def register_registro_routes(app):
             return redirect(url_for('registrar_persona'))
 
         sede_options = get_sede_options()
-        return render_template('registrar.html', usuario=usuario, carrera_options=[], seccion_options=[], sede_options=sede_options)
+        jornadas_options = get_jornadas_options()
+        return render_template('registrar.html', usuario=usuario, carrera_options=[], seccion_options=[], sede_options=sede_options, jornadas_options=jornadas_options)

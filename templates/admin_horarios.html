@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Horarios</h2>
+<a class="btn btn-primary mb-3" href="{{ url_for('admin_horarios_nuevo') }}">Nuevo horario</a>
+<table class="table table-sm">
+<thead><tr><th>ID</th><th>Asignación</th><th>Día</th><th>Inicio</th><th>Fin</th><th>Salón</th><th>Acciones</th></tr></thead>
+<tbody>
+{% for h in horarios %}
+<tr>
+<td>{{ h.id_horario }}</td>
+<td>{{ h.id_asignacion or '-' }}</td>
+<td>{{ h.dia }}</td>
+<td>{{ h.hora_inicio }}</td>
+<td>{{ h.hora_fin }}</td>
+<td>{{ h.id_salon or '-' }}</td>
+<td>
+<form method="post" action="{{ url_for('admin_horarios_eliminar', id_horario=h.id_horario) }}" onsubmit="return confirm('Eliminar horario?');">
+<button class="btn btn-sm btn-danger">Eliminar</button>
+</form>
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,300 @@
+-- Migración: añadir jornadas, salones, horarios y mapeo de cámaras
+-- Revisa antes de ejecutar en producción. Hacer backup de la BD.
+
+-- -------------------------
+-- 1) Crear tablas nuevas
+-- -------------------------
+CREATE TABLE IF NOT EXISTS jornadas (
+  id_jornada INT NOT NULL AUTO_INCREMENT,
+  nombre VARCHAR(100) NOT NULL,
+  descripcion VARCHAR(255) DEFAULT NULL,
+  PRIMARY KEY (id_jornada),
+  UNIQUE KEY ux_jornadas_nombre (nombre)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS jornadas_sedes (
+  id INT NOT NULL AUTO_INCREMENT,
+  id_jornada INT NOT NULL,
+  id_sede INT NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY ux_jornada_sede (id_jornada, id_sede),
+  KEY (id_jornada),
+  KEY (id_sede),
+  CONSTRAINT fk_jornadasedes_jornada FOREIGN KEY (id_jornada) REFERENCES jornadas(id_jornada),
+  CONSTRAINT fk_jornadasedes_sede FOREIGN KEY (id_sede) REFERENCES sedes(id_sede)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS salones (
+  id_salon INT NOT NULL AUTO_INCREMENT,
+  nombre VARCHAR(100) NOT NULL,
+  codigo VARCHAR(50) DEFAULT NULL,
+  id_sede INT DEFAULT NULL,
+  ubicacion VARCHAR(255) DEFAULT NULL,
+  descripcion TEXT DEFAULT NULL,
+  PRIMARY KEY (id_salon),
+  KEY (id_sede),
+  CONSTRAINT fk_salones_sedes FOREIGN KEY (id_sede) REFERENCES sedes(id_sede)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS camaras (
+  cam_id VARCHAR(50) PRIMARY KEY,
+  nombre VARCHAR(120) DEFAULT NULL,
+  source VARCHAR(255) DEFAULT NULL,
+  id_sede INT DEFAULT NULL,
+  descripcion TEXT DEFAULT NULL,
+  CONSTRAINT fk_camaras_sedes FOREIGN KEY (id_sede) REFERENCES sedes(id_sede)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS camera_mappings (
+  id INT NOT NULL AUTO_INCREMENT,
+  cam_id VARCHAR(50) NOT NULL,
+  id_salon INT DEFAULT NULL,
+  id_sede_carrera INT DEFAULT NULL,
+  id_seccion INT DEFAULT NULL,
+  id_jornada INT DEFAULT NULL,
+  activo TINYINT(1) DEFAULT 1,
+  PRIMARY KEY (id),
+  UNIQUE KEY ux_cammap (cam_id, id_salon, id_sede_carrera, id_seccion, id_jornada),
+  KEY (cam_id),
+  KEY (id_salon),
+  KEY (id_sede_carrera),
+  KEY (id_seccion),
+  KEY (id_jornada),
+  CONSTRAINT fk_cammap_cam FOREIGN KEY (cam_id) REFERENCES camaras(cam_id),
+  CONSTRAINT fk_cammap_sede_carrera FOREIGN KEY (id_sede_carrera) REFERENCES sede_carrera(id_sede_carrera),
+  CONSTRAINT fk_cammap_seccion FOREIGN KEY (id_seccion) REFERENCES secciones(id_seccion),
+  CONSTRAINT fk_cammap_salon FOREIGN KEY (id_salon) REFERENCES salones(id_salon),
+  CONSTRAINT fk_cammap_jornada FOREIGN KEY (id_jornada) REFERENCES jornadas(id_jornada)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS horarios (
+  id_horario INT NOT NULL AUTO_INCREMENT,
+  id_asignacion INT NOT NULL,
+  dia ENUM('LUN','MAR','MIE','JUE','VIE','SAB','DOM') NOT NULL,
+  hora_inicio TIME NOT NULL,
+  hora_fin TIME NOT NULL,
+  id_salon INT DEFAULT NULL,
+  PRIMARY KEY (id_horario),
+  KEY (id_asignacion),
+  KEY (id_salon),
+  CONSTRAINT fk_horario_asignacion FOREIGN KEY (id_asignacion) REFERENCES asignacion_cursos(id_asignacion),
+  CONSTRAINT fk_horario_salon FOREIGN KEY (id_salon) REFERENCES salones(id_salon)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- -------------------------
+-- 2) Asegurar columnas en tablas existentes (operaciones condicionales)
+-- -------------------------
+DELIMITER $$
+DROP PROCEDURE IF EXISTS ensure_jornadas_columns$$
+CREATE PROCEDURE ensure_jornadas_columns()
+BEGIN
+  -- asignacion_cursos.id_salon
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'asignacion_cursos' AND COLUMN_NAME = 'id_salon'
+  ) THEN
+    ALTER TABLE asignacion_cursos ADD COLUMN id_salon INT NULL;
+  END IF;
+
+  -- asignacion_cursos.id_jornada
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'asignacion_cursos' AND COLUMN_NAME = 'id_jornada'
+  ) THEN
+    ALTER TABLE asignacion_cursos ADD COLUMN id_jornada INT NULL;
+  END IF;
+
+  -- roles_persona.id_jornada
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'roles_persona' AND COLUMN_NAME = 'id_jornada'
+  ) THEN
+    ALTER TABLE roles_persona ADD COLUMN id_jornada INT NULL;
+  END IF;
+
+  -- camera_mappings.id_seccion
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'camera_mappings' AND COLUMN_NAME = 'id_seccion'
+  ) THEN
+    ALTER TABLE camera_mappings ADD COLUMN id_seccion INT DEFAULT NULL;
+  END IF;
+END$$
+DELIMITER ;
+
+CALL ensure_jornadas_columns();
+DROP PROCEDURE IF EXISTS ensure_jornadas_columns;
+
+-- Añadir índices y constraints si faltan (no-fallible checks)
+-- id_salon en asignacion_cursos index
+SET @exists = (
+  SELECT COUNT(*) FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'asignacion_cursos' AND COLUMN_NAME = 'id_salon'
+);
+-- crea índice si no existe
+SET @s = IF(@exists = 0, 'ALTER TABLE asignacion_cursos ADD INDEX (id_salon)', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @exists = (
+  SELECT COUNT(*) FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'asignacion_cursos' AND COLUMN_NAME = 'id_jornada'
+);
+SET @s = IF(@exists = 0, 'ALTER TABLE asignacion_cursos ADD INDEX (id_jornada)', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- roles_persona.id_jornada index
+SET @exists = (
+  SELECT COUNT(*) FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'roles_persona' AND COLUMN_NAME = 'id_jornada'
+);
+SET @s = IF(@exists = 0, 'ALTER TABLE roles_persona ADD INDEX (id_jornada)', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- camera_mappings.id_seccion index
+SET @exists = (
+  SELECT COUNT(*) FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'camera_mappings' AND COLUMN_NAME = 'id_seccion'
+);
+SET @s = IF(@exists = 0, 'ALTER TABLE camera_mappings ADD INDEX (id_seccion)', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- camera_mappings.id_seccion foreign key
+SET @has_fk = (
+  SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS tc
+  JOIN information_schema.KEY_COLUMN_USAGE kcu ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+  WHERE tc.CONSTRAINT_SCHEMA = DATABASE()
+    AND tc.TABLE_NAME = 'camera_mappings'
+    AND tc.CONSTRAINT_TYPE = 'FOREIGN KEY'
+    AND kcu.COLUMN_NAME = 'id_seccion'
+);
+SET @s = IF(@has_fk = 0, 'ALTER TABLE camera_mappings ADD CONSTRAINT fk_cammap_seccion FOREIGN KEY (id_seccion) REFERENCES secciones(id_seccion)', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Añadir constraints FK si no existen (nombres sugeridos)
+-- Añadir constraints FK si no existen (nombres sugeridos)
+SELECT COUNT(*) INTO @has_fk FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'asignacion_cursos' AND CONSTRAINT_NAME = 'fk_asignacion_salon';
+SET @s = IF(@has_fk = 0, 'ALTER TABLE asignacion_cursos ADD CONSTRAINT fk_asignacion_salon FOREIGN KEY (id_salon) REFERENCES salones(id_salon)', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SELECT COUNT(*) INTO @has_fk FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'asignacion_cursos' AND CONSTRAINT_NAME = 'fk_asignacion_jornada';
+SET @s = IF(@has_fk = 0, 'ALTER TABLE asignacion_cursos ADD CONSTRAINT fk_asignacion_jornada FOREIGN KEY (id_jornada) REFERENCES jornadas(id_jornada)', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SELECT COUNT(*) INTO @has_fk FROM information_schema.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'roles_persona' AND CONSTRAINT_NAME = 'fk_rolespersona_jornada';
+SET @s = IF(@has_fk = 0, 'ALTER TABLE roles_persona ADD CONSTRAINT fk_rolespersona_jornada FOREIGN KEY (id_jornada) REFERENCES jornadas(id_jornada)', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- -------------------------
+-- 3) Datos de ejemplo (ajusta ids según tu BD)
+-- -------------------------
+-- Asegurar que la columna `descripcion` exista en `jornadas` (puede venir de volcado anterior)
+SELECT COUNT(*) INTO @has_col FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'jornadas' AND COLUMN_NAME = 'descripcion';
+SET @s = IF(@has_col = 0, 'ALTER TABLE jornadas ADD COLUMN descripcion VARCHAR(255) DEFAULT NULL', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Asegurar columnas adicionales en `salones` si la tabla ya existe con otro esquema
+SELECT COUNT(*) INTO @has_col FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'salones' AND COLUMN_NAME = 'codigo';
+SET @s = IF(@has_col = 0, 'ALTER TABLE salones ADD COLUMN codigo VARCHAR(50) DEFAULT NULL', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SELECT COUNT(*) INTO @has_col FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'salones' AND COLUMN_NAME = 'ubicacion';
+SET @s = IF(@has_col = 0, 'ALTER TABLE salones ADD COLUMN ubicacion VARCHAR(255) DEFAULT NULL', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SELECT COUNT(*) INTO @has_col FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'salones' AND COLUMN_NAME = 'descripcion';
+SET @s = IF(@has_col = 0, 'ALTER TABLE salones ADD COLUMN descripcion TEXT DEFAULT NULL', 'SELECT 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+INSERT INTO jornadas (nombre, descripcion) VALUES
+  ('Mañana', 'Jornada de la mañana'),
+  ('Tarde', 'Jornada de la tarde'),
+  ('Noche', 'Jornada nocturna'),
+  ('Sábado', 'Jornada sabados'),
+  ('Domingo', 'Jornada domingos')
+ON DUPLICATE KEY UPDATE nombre = VALUES(nombre);
+
+-- Vincular jornadas a una sede de ejemplo (sede id=1) si no existe
+INSERT INTO jornadas_sedes (id_jornada, id_sede)
+SELECT j.id_jornada, s.id_sede
+FROM jornadas j
+JOIN sedes s ON s.id_sede = 1
+WHERE j.nombre IN ('Sábado', 'Domingo')
+  AND NOT EXISTS (
+    SELECT 1 FROM jornadas_sedes js WHERE js.id_jornada = j.id_jornada AND js.id_sede = s.id_sede
+  );
+
+-- Insertar ejemplo de cámara
+INSERT INTO camaras (cam_id, nombre, source, id_sede, descripcion) VALUES
+  ('cam1','Puerta Principal','http://10.159.145.12:4747/video',1,'Camara puerta principal')
+ON DUPLICATE KEY UPDATE nombre=VALUES(nombre), source=VALUES(source), id_sede=VALUES(id_sede), descripcion=VALUES(descripcion);
+
+-- Crear ejemplo de salón (si no existe)
+INSERT INTO salones (nombre, codigo, id_sede, ubicacion)
+SELECT * FROM (SELECT 'Salón 306' AS nombre, '306' AS codigo, 1 AS id_sede, 'Edificio A' AS ubicacion) AS tmp
+WHERE NOT EXISTS (SELECT 1 FROM salones WHERE nombre = 'Salón 306' LIMIT 1);
+
+SET @id_salon_306 = (SELECT id_salon FROM salones WHERE nombre = 'Salón 306' LIMIT 1);
+
+-- Ejemplo de mappings: cam2 (Salón 306) mapeada a dos jornadas distintas
+INSERT INTO camaras (cam_id, nombre, source, id_sede, descripcion)
+SELECT 'cam2','Salón 306','http://192.168.1.72:4747/video',1,'IPCam salón 306'
+WHERE NOT EXISTS (SELECT 1 FROM camaras WHERE cam_id = 'cam2' LIMIT 1);
+
+SET @id_asig_sab = 1;
+SET @id_asig_dom = 2;
+
+SET @id_jornada_sab = (
+  SELECT j.id_jornada FROM jornadas j WHERE j.nombre LIKE 'Sábado' LIMIT 1
+);
+SET @id_jornada_dom = (
+  SELECT j.id_jornada FROM jornadas j WHERE j.nombre LIKE 'Domingo' LIMIT 1
+);
+
+INSERT INTO camera_mappings (cam_id, id_salon, id_sede_carrera, id_jornada, activo)
+SELECT 'cam2', @id_salon_306, sc.id_sede_carrera, @id_jornada_sab, 1
+FROM sede_carrera sc
+WHERE sc.id_sede = 1
+LIMIT 1
+ON DUPLICATE KEY UPDATE activo = 1;
+
+INSERT INTO camera_mappings (cam_id, id_salon, id_sede_carrera, id_jornada, activo)
+SELECT 'cam2', @id_salon_306, sc.id_sede_carrera, @id_jornada_dom, 1
+FROM sede_carrera sc
+WHERE sc.id_sede = 1
+LIMIT 1
+ON DUPLICATE KEY UPDATE activo = 1;
+
+-- Ejemplos de horarios (ajusta id_asignacion si es necesario)
+-- Insertar horarios: usa columna `dia` si existe, sino `dia_semana` (compatible con volcado previo)
+SELECT COUNT(*) INTO @has_dia_col FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'horarios' AND COLUMN_NAME = 'dia';
+SET @target_col = IF(@has_dia_col > 0, 'dia', 'dia_semana');
+SELECT COLUMN_TYPE INTO @coltype FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'horarios' AND COLUMN_NAME = @target_col LIMIT 1;
+
+SET @val_sab = IF(LOCATE("'SAB'", @coltype) > 0, 'SAB', IF(LOCATE("'sabado'", LOWER(@coltype)) > 0, 'sabado', 'SAB'));
+SET @val_dom = IF(LOCATE("'DOM'", @coltype) > 0, 'DOM', IF(LOCATE("'domingo'", LOWER(@coltype)) > 0, 'domingo', 'DOM'));
+
+SET @has_asig = (SELECT COUNT(*) FROM asignacion_cursos WHERE id_asignacion = @id_asig_sab);
+SET @ins = IF(@has_asig > 0,
+  CONCAT('INSERT INTO horarios (id_asignacion, ', @target_col, ', hora_inicio, hora_fin, id_salon, id_jornada) SELECT ', @id_asig_sab, ', ', QUOTE(@val_sab), ', ''08:00:00'', ''10:00:00'', ', @id_salon_306, ', ', IFNULL(@id_jornada_sab, 'NULL'), ' WHERE @id_jornada_sab IS NOT NULL AND NOT EXISTS (SELECT 1 FROM horarios WHERE id_asignacion = ', @id_asig_sab, ' AND ', @target_col, '=', QUOTE(@val_sab), ' LIMIT 1)')
+  , 'SELECT 0');
+PREPARE stmt FROM @ins; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @has_asig = (SELECT COUNT(*) FROM asignacion_cursos WHERE id_asignacion = @id_asig_dom);
+SET @ins = IF(@has_asig > 0,
+  CONCAT('INSERT INTO horarios (id_asignacion, ', @target_col, ', hora_inicio, hora_fin, id_salon, id_jornada) SELECT ', @id_asig_dom, ', ', QUOTE(@val_dom), ', ''09:00:00'', ''11:00:00'', ', @id_salon_306, ', ', IFNULL(@id_jornada_dom, 'NULL'), ' WHERE @id_jornada_dom IS NOT NULL AND NOT EXISTS (SELECT 1 FROM horarios WHERE id_asignacion = ', @id_asig_dom, ' AND ', @target_col, '=', QUOTE(@val_dom), ' LIMIT 1)')
+  , 'SELECT 0');
+PREPARE stmt FROM @ins; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Recomendaciones:
+-- 1) Ejecuta este script en una copia de la base de datos primero.
+-- 2) Ajusta ids (id_salon, id_sede_carrera, id_asignacion, id_jornada) según los valores reales de tu BD.
+-- 3) Si tu cliente SQL no permite múltiples sentencias con delimiters, ejecuta las secciones de procedimiento manualmente.

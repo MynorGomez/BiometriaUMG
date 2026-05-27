@@ -4,7 +4,7 @@ from datetime import date
 from flask import render_template, request, redirect, url_for, session, flash, jsonify, send_file
 
 from database import get_db_connection
-from helpers import obtener_usuario_sesion
+from helpers import obtener_usuario_sesion, get_roles_persona_schema, get_active_role_clause
 from pdf_utils import generar_pdf_asistencia, enviar_pdf_por_correo
 
 
@@ -36,22 +36,43 @@ def register_docente_routes(app):
         id_catedratico = fila['id_persona']
         cursor.close()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT DISTINCT c.id_curso,
-                   c.nombre AS nombre_curso,
-                   ca.nombre AS carrera,
-                   s.nombre AS seccion
-            FROM cursos c
-            JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
-            JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
-            JOIN secciones s ON ac.id_seccion = s.id_seccion
-            JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
-            JOIN carreras ca ON sc.id_carrera = ca.id_carrera
-            WHERE r.id_persona = %s
-              AND r.tipo_persona = 'catedratico'
-              AND r.activo = 1
-            ORDER BY c.nombre
-        """, (id_catedratico,))
+        rp_cols = get_roles_persona_schema()
+        if 'id_rol' in rp_cols:
+            activo_clause = get_active_role_clause('r')
+            cursor.execute(f"""
+                SELECT DISTINCT c.id_curso,
+                       c.nombre AS nombre_curso,
+                       ca.nombre AS carrera,
+                       s.nombre AS seccion
+                FROM cursos c
+                JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
+                JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
+                JOIN roles ro ON r.id_rol = ro.id_rol
+                JOIN secciones s ON ac.id_seccion = s.id_seccion
+                JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
+                JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+                WHERE r.id_persona = %s
+                  AND ro.nombre = 'catedratico'
+                  {activo_clause}
+                ORDER BY c.nombre
+            """, (id_catedratico,))
+        else:
+            cursor.execute("""
+                SELECT DISTINCT c.id_curso,
+                       c.nombre AS nombre_curso,
+                       ca.nombre AS carrera,
+                       s.nombre AS seccion
+                FROM cursos c
+                JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
+                JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
+                JOIN secciones s ON ac.id_seccion = s.id_seccion
+                JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
+                JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+                WHERE r.id_persona = %s
+                  AND r.tipo_persona = 'catedratico'
+                  AND r.activo = 1
+                ORDER BY c.nombre
+            """, (id_catedratico,))
         cursos = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -70,23 +91,45 @@ def register_docente_routes(app):
         fecha_hoy = date.today()
         conexion = get_db_connection()
         cursor = conexion.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT c.id_curso,
-                   c.nombre AS nombre_curso,
-                   ca.nombre AS carrera,
-                   s.nombre AS seccion
-            FROM cursos c
-            JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
-            JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
-            JOIN secciones s ON ac.id_seccion = s.id_seccion
-            JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
-            JOIN carreras ca ON sc.id_carrera = ca.id_carrera
-            WHERE c.id_curso = %s
-              AND r.id_persona = %s
-              AND r.tipo_persona = 'catedratico'
-              AND r.activo = 1
-            LIMIT 1
-        """, (id_curso, id_catedratico))
+        rp_cols = get_roles_persona_schema()
+        if 'id_rol' in rp_cols:
+            activo_clause = get_active_role_clause('r')
+            cursor.execute(f"""
+                SELECT c.id_curso,
+                       c.nombre AS nombre_curso,
+                       ca.nombre AS carrera,
+                       s.nombre AS seccion
+                FROM cursos c
+                JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
+                JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
+                JOIN roles ro ON r.id_rol = ro.id_rol
+                JOIN secciones s ON ac.id_seccion = s.id_seccion
+                JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
+                JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+                WHERE c.id_curso = %s
+                  AND r.id_persona = %s
+                  AND ro.nombre = 'catedratico'
+                  {activo_clause}
+                LIMIT 1
+            """, (id_curso, id_catedratico))
+        else:
+            cursor.execute("""
+                SELECT c.id_curso,
+                       c.nombre AS nombre_curso,
+                       ca.nombre AS carrera,
+                       s.nombre AS seccion
+                FROM cursos c
+                JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
+                JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
+                JOIN secciones s ON ac.id_seccion = s.id_seccion
+                JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
+                JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+                WHERE c.id_curso = %s
+                  AND r.id_persona = %s
+                  AND r.tipo_persona = 'catedratico'
+                  AND r.activo = 1
+                LIMIT 1
+            """, (id_curso, id_catedratico))
         curso = cursor.fetchone()
         if not curso:
             cursor.close()
@@ -94,7 +137,7 @@ def register_docente_routes(app):
             flash('No tiene acceso a este curso.', 'danger')
             return redirect(url_for('mis_cursos'))
         cursor.execute("""
-            SELECT p.id_persona, p.nombre, p.apellido, p.correo, p.foto, r.carnet
+            SELECT p.id_persona, p.nombre, p.apellido, COALESCE(p.correo_institucional, p.correo_personal) AS correo, p.foto, r.carnet
             FROM inscripciones i
             JOIN roles_persona r ON i.id_rol_persona = r.id_rol_persona
             JOIN personas p ON r.id_persona = p.id_persona
@@ -149,33 +192,55 @@ def register_docente_routes(app):
         conexion = get_db_connection()
         cursor = conexion.cursor(dictionary=True)
         try:
-            cursor.execute("""
-                SELECT c.id_curso,
-                       c.nombre AS nombre_curso,
-                       ca.nombre AS carrera,
-                       s.nombre AS seccion
-                FROM cursos c
-                JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
-                JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
-                JOIN secciones s ON ac.id_seccion = s.id_seccion
-                JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
-                JOIN carreras ca ON sc.id_carrera = ca.id_carrera
-                WHERE c.id_curso = %s
-                  AND r.id_persona = %s
-                  AND r.tipo_persona = 'catedratico'
-                  AND r.activo = 1
-                LIMIT 1
-            """, (id_curso, usuario['id_persona']))
+            rp_cols = get_roles_persona_schema()
+            if 'id_rol' in rp_cols:
+                activo_clause = get_active_role_clause('r')
+                cursor.execute(f"""
+                    SELECT c.id_curso,
+                           c.nombre AS nombre_curso,
+                           ca.nombre AS carrera,
+                           s.nombre AS seccion
+                    FROM cursos c
+                    JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
+                    JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
+                    JOIN roles ro ON r.id_rol = ro.id_rol
+                    JOIN secciones s ON ac.id_seccion = s.id_seccion
+                    JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
+                    JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+                    WHERE c.id_curso = %s
+                      AND r.id_persona = %s
+                      AND ro.nombre = 'catedratico'
+                      {activo_clause}
+                    LIMIT 1
+                """, (id_curso, usuario['id_persona']))
+            else:
+                cursor.execute("""
+                    SELECT c.id_curso,
+                           c.nombre AS nombre_curso,
+                           ca.nombre AS carrera,
+                           s.nombre AS seccion
+                    FROM cursos c
+                    JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
+                    JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
+                    JOIN secciones s ON ac.id_seccion = s.id_seccion
+                    JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
+                    JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+                    WHERE c.id_curso = %s
+                      AND r.id_persona = %s
+                      AND r.tipo_persona = 'catedratico'
+                      AND r.activo = 1
+                    LIMIT 1
+                """, (id_curso, usuario['id_persona']))
             curso = cursor.fetchone()
             if not curso:
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     return jsonify({'success': False, 'message': 'No tiene acceso a este curso.', 'redirect_url': url_for('mis_cursos')}), 403
                 flash('No tiene acceso a este curso.', 'danger')
                 return redirect(url_for('mis_cursos'))
-            cursor.execute('SELECT id_persona, nombre, apellido, correo FROM personas WHERE id_persona = %s', (usuario['id_persona'],))
+            cursor.execute('SELECT id_persona, nombre, apellido, COALESCE(correo_institucional, correo_personal) AS correo FROM personas WHERE id_persona = %s', (usuario['id_persona'],))
             docente = cursor.fetchone()
             cursor.execute("""
-                SELECT p.id_persona, p.nombre, p.apellido, p.correo, r.carnet
+                SELECT p.id_persona, p.nombre, p.apellido, COALESCE(p.correo_institucional, p.correo_personal) AS correo, r.carnet
                 FROM inscripciones i
                 JOIN roles_persona r ON i.id_rol_persona = r.id_rol_persona
                 JOIN personas p ON r.id_persona = p.id_persona

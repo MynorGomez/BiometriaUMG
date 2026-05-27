@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0"><i class="bi bi-clipboard-check"></i> Mi Asistencia</h2>
+        <a href="{{ url_for('dashboard_estudiante') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+
+    {% if cursos %}
+    <div class="accordion" id="accordionAsistencia">
+        {% for curso in cursos %}
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button {% if loop.index != 1 %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#curso{{ curso.id_curso }}">
+                    <strong>{{ curso.curso }}</strong>
+                    {% if curso.stats %}
+                    <span class="badge bg-{% if curso.stats.porcentaje >= 80 %}success{% elif curso.stats.porcentaje >= 60 %}warning{% else %}danger{% endif %} ms-2">
+                        {{ curso.stats.porcentaje }}%
+                    </span>
+                    {% endif %}
+                </button>
+            </h2>
+            <div id="curso{{ curso.id_curso }}" class="accordion-collapse collapse {% if loop.index == 1 %}show{% endif %}" data-bs-parent="#accordionAsistencia">
+                <div class="accordion-body">
+                    <!-- Estadísticas -->
+                    {% if curso.stats %}
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Total Clases</h6>
+                                    <h4 class="mb-0">{{ curso.stats.total }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <h6>Presentes</h6>
+                                    <h4 class="mb-0">{{ curso.stats.presentes }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body text-center">
+                                    <h6>Tardes</h6>
+                                    <h4 class="mb-0">{{ curso.stats.tardes }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body text-center">
+                                    <h6>Ausentes</h6>
+                                    <h4 class="mb-0">{{ curso.stats.ausentes }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Tabla de Asistencias -->
+                    <h6 class="mb-3">Registro de Asistencias</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Hora</th>
+                                    <th>Estado</th>
+                                    <th>Método</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if curso.asistencias %}
+                                    {% for a in curso.asistencias %}
+                                    <tr>
+                                        <td>{{ a.fecha.strftime('%d/%m/%Y') if a.fecha else '-' }}</td>
+                                        <td>{{ a.hora_entrada.strftime('%H:%M') if a.hora_entrada else '-' }}</td>
+                                        <td>
+                                            {% if a.estado == 'presente' %}
+                                                <span class="badge bg-success">Presente</span>
+                                            {% elif a.estado == 'ausente' %}
+                                                <span class="badge bg-danger">Ausente</span>
+                                            {% elif a.estado == 'tarde' %}
+                                                <span class="badge bg-warning">Tarde</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if a.metodo_registro == 'facial' %}
+                                                <i class="bi bi-camera"></i> Facial
+                                            {% else %}
+                                                <i class="bi bi-pencil"></i> Manual
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">Sin registros</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> No tienes cursos inscritos
+    </div>
+    {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+{% endblock %}

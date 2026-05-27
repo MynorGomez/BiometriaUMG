@@ -9,6 +9,10 @@ from helpers import (
     get_seccion_options,
     get_carrera_id,
     get_seccion_id,
+    get_roles_persona_schema,
+    get_rol_id_by_name,
+    get_active_role_clause,
+    get_jornadas_options,
 )
 
 
@@ -28,6 +32,7 @@ def register_cursos_routes(app):
         carrera = request.form.get('carrera', '')
         seccion = request.form.get('seccion', '')
         id_curso = request.form.get('id_curso', '')
+        id_jornada = request.form.get('id_jornada', '')
 
         if request.method == 'POST':
             form_data = request.form.to_dict(flat=True)
@@ -41,12 +46,27 @@ def register_cursos_routes(app):
                 flash('Seleccione una sección válida.', 'danger')
             elif not id_curso:
                 flash('Seleccione un curso válido.', 'danger')
+            elif not id_jornada:
+                flash('Seleccione una jornada válida.', 'danger')
             else:
                 try:
-                    cursor.execute(
-                        'SELECT id_rol_persona FROM roles_persona WHERE id_persona = %s AND tipo_persona = \'catedratico\' AND activo = 1',
-                        (id_catedratico,)
-                    )
+                    cols = get_roles_persona_schema()
+                    active_clause = get_active_role_clause()
+                    if 'tipo_persona' in cols:
+                        cursor.execute(
+                            f'SELECT id_rol_persona FROM roles_persona WHERE id_persona = %s AND tipo_persona = %s{active_clause}',
+                            (id_catedratico, 'catedratico')
+                        )
+                    else:
+                        id_rol_catedratico = get_rol_id_by_name('catedratico')
+                        if id_rol_catedratico is not None:
+                            cursor.execute(
+                                f'SELECT id_rol_persona FROM roles_persona WHERE id_persona = %s AND id_rol = %s{active_clause}',
+                                (id_catedratico, id_rol_catedratico)
+                            )
+                        else:
+                            rol_result = None
+                            raise ValueError('No existe el rol de catedrático en la base de datos.')
                     rol_result = cursor.fetchone()
                     if not rol_result:
                         flash('El catedrático seleccionado no es válido o no está activo.', 'danger')
@@ -71,8 +91,8 @@ def register_cursos_routes(app):
                                 flash('El curso seleccionado no pertenece a la sede/carrera/sección seleccionada.', 'danger')
                             else:
                                 cursor.execute(
-                                    'INSERT INTO asignacion_cursos (id_curso, id_rol_persona, id_sede_carrera, id_seccion) VALUES (%s, %s, %s, %s)',
-                                    (id_curso, id_rol_persona, id_sede_carrera, id_seccion)
+                                    'INSERT INTO asignacion_cursos (id_curso, id_rol_persona, id_sede_carrera, id_seccion, id_jornada) VALUES (%s, %s, %s, %s, %s)',
+                                    (id_curso, id_rol_persona, id_sede_carrera, id_seccion, id_jornada)
                                 )
                                 conexion.commit()
                                 flash('Curso asignado al catedrático correctamente.', 'success')
@@ -83,17 +103,45 @@ def register_cursos_routes(app):
                     conexion.rollback()
                     flash(f'Error asignando curso: {e}', 'danger')
 
-        cursor.execute("""
-            SELECT p.id_persona, p.nombre, p.apellido
-            FROM personas p
-            JOIN roles_persona r ON p.id_persona = r.id_persona
-            WHERE r.tipo_persona = 'catedratico'
-              AND r.activo = 1
-              AND p.estado = 'activo'
-            ORDER BY p.nombre, p.apellido
-        """)
+        cols = get_roles_persona_schema()
+        active_clause = get_active_role_clause('r')
+        if 'tipo_persona' in cols:
+            cursor.execute(f"""
+                SELECT p.id_persona, p.nombre, p.apellido
+                FROM personas p
+                JOIN roles_persona r ON p.id_persona = r.id_persona
+                WHERE r.tipo_persona = 'catedratico'{active_clause}
+                  AND p.estado = 'activo'
+                ORDER BY p.nombre, p.apellido
+            """)
+        else:
+            id_rol_catedratico = get_rol_id_by_name('catedratico')
+            if id_rol_catedratico is not None:
+                cursor.execute(f"""
+                    SELECT p.id_persona, p.nombre, p.apellido
+                    FROM personas p
+                    JOIN roles_persona r ON p.id_persona = r.id_persona
+                    WHERE r.id_rol = %s{active_clause}
+                      AND p.estado = 'activo'
+                    ORDER BY p.nombre, p.apellido
+                """, (id_rol_catedratico,))
+            else:
+                catedraticos = []
+                cursor.close()
+                conexion.close()
+                return render_template(
+                    'cursos/nuevo.html',
+                    usuario=usuario,
+                    catedraticos=catedraticos,
+                    sede_options=sede_options,
+                    carrera_options=carrera_options,
+                    curso_options=curso_options,
+                    seccion_options=seccion_options,
+                    form_data=form_data
+                )
         catedraticos = cursor.fetchall()
         sede_options = get_sede_options()
+        jornadas_options = get_jornadas_options()
         carrera_options = []
         curso_options = []
         seccion_options = []
@@ -116,6 +164,7 @@ def register_cursos_routes(app):
             usuario=usuario,
             catedraticos=catedraticos,
             sede_options=sede_options,
+            jornadas_options=jornadas_options,
             carrera_options=carrera_options,
             curso_options=curso_options,
             seccion_options=seccion_options,
@@ -235,10 +284,11 @@ def register_cursos_routes(app):
             section_id = section_row[0] if section_row else None
             if section_id:
                 cursor.execute("""
-                    SELECT p.id_persona, p.nombre, p.apellido
+                    SELECT p.id_persona, p.nombre, p.apellido, ac.id_jornada, j.nombre
                     FROM asignacion_cursos ac
                     JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
                     JOIN personas p ON r.id_persona = p.id_persona
+                    LEFT JOIN jornadas j ON ac.id_jornada = j.id_jornada
                     WHERE ac.id_curso = %s
                       AND ac.id_seccion = %s
                     ORDER BY ac.id_asignacion DESC
@@ -246,8 +296,11 @@ def register_cursos_routes(app):
                 """, (id_curso, section_id))
                 prof_row = cursor.fetchone()
                 if prof_row:
-                    catedratico_info = {'id_persona': prof_row[0], 'nombre': f"{prof_row[1]} {prof_row[2]}"}
-
+                    catedratico_info = {
+                        'id_persona': prof_row[0],
+                        'nombre': f"{prof_row[1]} {prof_row[2]}",
+                        'jornada': prof_row[4] if prof_row[4] else 'No especificada'
+                    }
         if request.method == 'POST':
             id_asignacion = None
             if selected_section and section_id:
@@ -256,26 +309,53 @@ def register_cursos_routes(app):
                 id_asignacion = asignacion_row[0] if asignacion_row else None
 
             estudiantes_seleccionados = request.form.getlist('estudiantes')
+            cols = get_roles_persona_schema()
+            active_clause = get_active_role_clause()
+            tipo_estudiante = 'estudiante'
+            tipo_catedratico = 'catedratico'
+            id_rol_estudiante = None
+            id_rol_catedratico = None
+            if 'tipo_persona' not in cols:
+                id_rol_estudiante = get_rol_id_by_name(tipo_estudiante)
+                id_rol_catedratico = get_rol_id_by_name(tipo_catedratico)
+
             for id_persona in estudiantes_seleccionados:
-                cursor.execute("""
-                    SELECT id_rol_persona
-                    FROM roles_persona
-                    WHERE id_persona = %s
-                      AND tipo_persona = 'estudiante'
-                      AND activo = 1
-                    ORDER BY fecha_inicio DESC
-                    LIMIT 1
-                """, (id_persona,))
+                if 'tipo_persona' in cols:
+                    cursor.execute(f"""
+                        SELECT id_rol_persona
+                        FROM roles_persona
+                        WHERE id_persona = %s
+                          AND tipo_persona = %s{active_clause}
+                        ORDER BY fecha_inicio DESC
+                        LIMIT 1
+                    """, (id_persona, tipo_estudiante))
+                else:
+                    cursor.execute(f"""
+                        SELECT id_rol_persona
+                        FROM roles_persona
+                        WHERE id_persona = %s
+                          AND id_rol = %s{active_clause}
+                        ORDER BY fecha_inicio DESC
+                        LIMIT 1
+                    """, (id_persona, id_rol_estudiante))
                 rol = cursor.fetchone()
                 if not rol or id_asignacion is None:
                     continue
-                cursor.execute("""
-                    SELECT COUNT(*)
-                    FROM roles_persona rr
-                    WHERE rr.id_persona = %s
-                      AND rr.tipo_persona = 'catedratico'
-                      AND rr.activo = 1
-                """, (id_persona,))
+                rr_active_clause = get_active_role_clause('rr')
+                if 'tipo_persona' in cols:
+                    cursor.execute(f"""
+                        SELECT COUNT(*)
+                        FROM roles_persona rr
+                        WHERE rr.id_persona = %s
+                          AND rr.tipo_persona = %s{rr_active_clause}
+                    """, (id_persona, tipo_catedratico))
+                else:
+                    cursor.execute(f"""
+                        SELECT COUNT(*)
+                        FROM roles_persona rr
+                        WHERE rr.id_persona = %s
+                          AND rr.id_rol = %s{rr_active_clause}
+                    """, (id_persona, id_rol_catedratico))
                 if cursor.fetchone()[0] > 0:
                     continue
                 id_rol_persona = rol[0]
@@ -299,23 +379,43 @@ def register_cursos_routes(app):
         estudiantes = []
         inscritos = []
         if selected_section and section_id:
-            cursor.execute("""
-                SELECT p.id_persona, p.carnet, p.nombre, p.apellido, p.correo
-                FROM personas p
-                JOIN roles_persona r ON p.id_persona = r.id_persona
-                WHERE r.tipo_persona = 'estudiante'
-                  AND r.activo = 1
-                  AND r.id_carrera = %s
-                  AND r.id_seccion = %s
-                  AND p.estado = 'activo'
-                  AND NOT EXISTS (
-                      SELECT 1 FROM roles_persona rr
-                      WHERE rr.id_persona = p.id_persona
-                        AND rr.tipo_persona = 'catedratico'
-                        AND rr.activo = 1
-                  )
-                ORDER BY p.nombre, p.apellido
-            """, (carrera_id, section_id))
+            cols = get_roles_persona_schema()
+            active_clause = get_active_role_clause('r')
+            rr_active_clause = get_active_role_clause('rr')
+            if 'tipo_persona' in cols:
+                cursor.execute(f"""
+                    SELECT p.id_persona, p.carnet, p.nombre, p.apellido, p.correo
+                    FROM personas p
+                    JOIN roles_persona r ON p.id_persona = r.id_persona
+                    WHERE r.tipo_persona = 'estudiante'{active_clause}
+                      AND r.id_carrera = %s
+                      AND r.id_seccion = %s
+                      AND p.estado = 'activo'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM roles_persona rr
+                          WHERE rr.id_persona = p.id_persona
+                            AND rr.tipo_persona = 'catedratico'{rr_active_clause}
+                      )
+                    ORDER BY p.nombre, p.apellido
+                """, (carrera_id, section_id))
+            else:
+                id_rol_estudiante = get_rol_id_by_name('estudiante')
+                id_rol_catedratico = get_rol_id_by_name('catedratico')
+                cursor.execute(f"""
+                    SELECT p.id_persona, p.carnet, p.nombre, p.apellido, p.correo
+                    FROM personas p
+                    JOIN roles_persona r ON p.id_persona = r.id_persona
+                    WHERE r.id_rol = %s{active_clause}
+                      AND r.id_carrera = %s
+                      AND r.id_seccion = %s
+                      AND p.estado = 'activo'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM roles_persona rr
+                          WHERE rr.id_persona = p.id_persona
+                            AND rr.id_rol = %s{rr_active_clause}
+                      )
+                    ORDER BY p.nombre, p.apellido
+                """, (id_rol_estudiante, carrera_id, section_id, id_rol_catedratico))
             estudiantes = cursor.fetchall()
             cursor.execute("""
                 SELECT p.id_persona

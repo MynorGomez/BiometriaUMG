@@ -11,11 +11,16 @@ from .campus_helpers import (
     get_seccion_id,
     get_sede_options,
     is_valid_sede,
+    get_jornadas_options,
 )
 from .user_helpers import (
     limpiar_nombre,
     obtener_usuario_sesion,
     generar_carnet_unico,
+    get_roles_persona_schema,
+    get_active_role_clause,
+    get_role_name,
+    get_rol_id_by_name,
 )
 
 __all__ = [
@@ -31,6 +36,11 @@ __all__ = [
     'get_seccion_id',
     'get_sede_options',
     'is_valid_sede',
+    'get_jornadas_options',
+    'get_roles_persona_schema',
+    'get_active_role_clause',
+    'get_role_name',
+    'get_rol_id_by_name',
     'limpiar_nombre',
     'obtener_usuario_sesion',
     'generar_carnet_unico',

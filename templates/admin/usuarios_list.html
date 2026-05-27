@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0"><i class="bi bi-people-fill"></i> Gestión de Usuarios</h2>
+        <a href="{{ url_for('usuario_create') }}" class="btn btn-success">
+            <i class="bi bi-plus-circle"></i> Nuevo Usuario
+        </a>
+    </div>
+
+    <div class="card shadow">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Nombre Completo</th>
+                        <th>Carnet</th>
+                        <th>Correo</th>
+                        <th>Último Acceso</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if usuarios %}
+                        {% for u in usuarios %}
+                        <tr>
+                            <td>
+                                <code class="bg-light p-2">{{ u.username }}</code>
+                            </td>
+                            <td>{{ u.nombre }} {{ u.apellido }}</td>
+                            <td><span class="badge bg-info">{{ u.carnet or '-' }}</span></td>
+                            <td>{{ u.correo_institucional or '-' }}</td>
+                            <td>
+                                {% if u.ultimo_login %}
+                                    {{ u.ultimo_login.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                    <span class="text-muted">Nunca</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="post" action="{{ url_for('usuario_change_password', id_usuario=u.id_usuario) }}" class="d-inline">
+                                    <div class="input-group input-group-sm">
+                                        <input type="password" name="new_password" class="form-control" placeholder="Nueva contraseña" required>
+                                        <button type="submit" class="btn btn-outline-warning" title="Cambiar contraseña">
+                                            <i class="bi bi-key"></i>
+                                        </button>
+                                    </div>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox"></i> No hay usuarios registrados
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

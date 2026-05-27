@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Nuevo Mapping</h2>
+<form method="post">
+<div class="mb-3">
+<label class="form-label">Cámara</label>
+<select name="cam_id" class="form-select" required>
+<option value="">-- Seleccione cámara --</option>
+{% for c in cams %}
+<option value="{{ c.cam_id }}" {% if request.form.get('cam_id') == c.cam_id %}selected{% endif %}>{{ c.cam_id }} - {{ c.nombre }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="mb-3">
+<label class="form-label">Sede</label>
+<select name="id_sede" id="id_sede" class="form-select" required>
+<option value="">-- Seleccione sede --</option>
+{% for s in sedes %}
+<option value="{{ s.id_sede }}" {% if selected_sede == s.id_sede|string %}selected{% endif %}>{{ s.nombre }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="mb-3">
+<label class="form-label">Carrera</label>
+<select name="carrera" id="carrera" class="form-select" required>
+<option value="">-- Seleccione carrera --</option>
+{% for c in carreras %}
+<option value="{{ c }}" {% if selected_carrera == c %}selected{% endif %}>{{ c }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="mb-3">
+<label class="form-label">Sección</label>
+<select name="seccion" id="seccion" class="form-select" required>
+<option value="">-- Seleccione sección --</option>
+{% for sec in secciones %}
+<option value="{{ sec }}" {% if selected_seccion == sec %}selected{% endif %}>{{ sec }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="mb-3">
+<label class="form-label">Salón</label>
+<select name="id_salon" class="form-select" required>
+<option value="">-- Seleccione salón --</option>
+{% for s in salones %}
+<option value="{{ s.id_salon }}" {% if request.form.get('id_salon') == s.id_salon|string %}selected{% endif %}>{{ s.nombre }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="mb-3">
+<label class="form-label">Jornada</label>
+<select name="id_jornada" class="form-select" required>
+<option value="">-- Seleccione jornada --</option>
+{% for j in jornadas %}
+<option value="{{ j.id_jornada }}" {% if request.form.get('id_jornada') == j.id_jornada|string %}selected{% endif %}>{{ j.nombre or j.id_jornada }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="form-check mb-3">
+<input class="form-check-input" type="checkbox" value="1" name="activo" id="activo" checked>
+<label class="form-check-label" for="activo">Activo</label>
+</div>
+<button class="btn btn-primary" type="submit">Guardar</button>
+</form>
+<script>
+async function fetchCarreras() {
+    const sede = document.getElementById('id_sede').value;
+    const carreraSelect = document.getElementById('carrera');
+    const seccionSelect = document.getElementById('seccion');
+    carreraSelect.innerHTML = '<option value="">-- Seleccione carrera --</option>';
+    seccionSelect.innerHTML = '<option value="">-- Seleccione sección --</option>';
+    if (!sede) return;
+    const res = await fetch(`/admin/api/carreras_por_sede?id_sede=${encodeURIComponent(sede)}`);
+    const data = await res.json();
+    for (const carrera of data.carreras) {
+        const option = document.createElement('option');
+        option.value = carrera;
+        option.textContent = carrera;
+        carreraSelect.appendChild(option);
+    }
+}
+async function fetchSecciones() {
+    const sede = document.getElementById('id_sede').value;
+    const carrera = document.getElementById('carrera').value;
+    const seccionSelect = document.getElementById('seccion');
+    seccionSelect.innerHTML = '<option value="">-- Seleccione sección --</option>';
+    if (!sede || !carrera) return;
+    const res = await fetch(`/admin/api/secciones_por_sede_carrera?id_sede=${encodeURIComponent(sede)}&carrera=${encodeURIComponent(carrera)}`);
+    const data = await res.json();
+    for (const seccion of data.secciones) {
+        const option = document.createElement('option');
+        option.value = seccion;
+        option.textContent = seccion;
+        seccionSelect.appendChild(option);
+    }
+}
+document.getElementById('id_sede').addEventListener('change', fetchCarreras);
+document.getElementById('carrera').addEventListener('change', fetchSecciones);
+</script>
+{% endblock %}

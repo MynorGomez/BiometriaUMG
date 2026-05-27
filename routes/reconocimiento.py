@@ -11,10 +11,7 @@ from flask import Response, jsonify, render_template
 from database import get_db_connection
 from helpers import obtener_usuario_sesion
 
-CAMERAS = {
-    'cam1': {'nombre': 'Puerta Principal', 'ubicacion': 'Puerta Principal', 'source': 'http://10.159.145.12:4747/video'},
-    'cam2': {'nombre': 'Salón 306', 'ubicacion': 'Salón 306', 'source': 'http://192.168.1.72:4747/video'},
-}
+CAMERAS = {}
 
 SCALE = 0.35
 TIPO_REGISTRO = 'puerta_principal'
@@ -62,15 +59,22 @@ init_cam_state()
 
 def load_known_faces():
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("""
-        SELECT id_persona, nombre, apellido, carnet, correo, encoding_facial
-        FROM personas
-        WHERE encoding_facial IS NOT NULL
-          AND encoding_facial <> ''
-          AND estado = 'activo'
-    """)
-    rows = cursor.fetchall()
+    cursor = conn.cursor()
+    # detect available columns in personas
+    cursor.execute('SELECT DATABASE()')
+    db_name = cursor.fetchone()[0]
+    cursor.execute("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME='personas'", (db_name,))
+    cols = [r[0] for r in cursor.fetchall()]
+    select_cols = ['id_persona']
+    for c in ('nombre', 'apellido', 'carnet', 'correo', 'encoding_facial', 'estado'):
+        if c in cols and c not in select_cols:
+            select_cols.append(c)
+
+    sql = f"SELECT {', '.join(select_cols)} FROM personas WHERE encoding_facial IS NOT NULL AND encoding_facial <> ''"
+    if 'estado' in select_cols:
+        sql += " AND estado = 'activo'"
+    cursor.execute(sql)
+    rows = [dict(zip([col.lower() for col in select_cols], row)) for row in cursor.fetchall()]
     cursor.close()
     conn.close()
 
@@ -78,16 +82,16 @@ def load_known_faces():
     known_people = []
     for r in rows:
         try:
-            enc_list = json.loads(r['encoding_facial'])
+            enc_list = json.loads(r.get('encoding_facial') or '[]')
             enc = np.array(enc_list, dtype=np.float32)
             if enc.shape == (128,):
                 known_encodings.append(enc)
                 known_people.append({
                     'id_persona': r['id_persona'],
-                    'nombre': r['nombre'],
-                    'apellido': r['apellido'],
-                    'carnet': r['carnet'],
-                    'correo': r['correo'],
+                    'nombre': r.get('nombre'),
+                    'apellido': r.get('apellido'),
+                    'carnet': r.get('carnet'),
+                    'correo': r.get('correo'),
                 })
         except Exception as e:
             print('Encoding inválido id_persona=%s: %s' % (r.get('id_persona'), e))
@@ -127,6 +131,129 @@ def registrar_entrada(id_persona, ubicacion):
         print(f'Entrada ya registrada recientemente para persona={id_persona} ubicacion={ubicacion}')
     cursor.close()
     conn.close()
+
+
+def resolve_asignacion_for_camera(cam_id, ts=None):
+    """Resolver una asignacion activa para la cámara en el timestamp dado.
+    Devuelve (id_asignacion, id_salon) o (None, None).
+    Lógica:
+    - busca mappings en `camera_mappings` para la cámara
+    - intenta encontrar una asignacion por `horarios` (día + hora)
+    - fallback: busca en `asignacion_cursos` por id_salon e id_jornada
+    """
+    try:
+        if ts is None:
+            ts = datetime.now()
+        hora = ts.strftime('%H:%M:%S')
+        dia = ts.strftime('%a').upper()[:3]
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        # ensure camera mappings filtered by camera id and (optionally) camera's sede
+        cursor.execute("SELECT id_salon, id_sede_carrera, id_seccion, id_jornada FROM camera_mappings WHERE cam_id = %s AND activo = 1", (cam_id,))
+        maps = cursor.fetchall()
+        for m in maps:
+            id_salon = m.get('id_salon')
+            id_seccion = m.get('id_seccion')
+            id_jornada = m.get('id_jornada')
+            # 1) Buscar asignacion por horarios
+            if id_salon:
+                cursor.execute(
+                    """
+                    SELECT a.id_asignacion FROM asignacion_cursos a
+                    JOIN horarios h ON h.id_asignacion = a.id_asignacion
+                    WHERE h.id_salon = %s
+                      AND h.dia = %s
+                      AND %s BETWEEN h.hora_inicio AND h.hora_fin
+                    LIMIT 1
+                    """,
+                    (id_salon, dia, hora)
+                )
+                row = cursor.fetchone()
+                if row:
+                    cursor.close()
+                    conn.close()
+                    return row['id_asignacion'], id_salon
+            # 2) Fallback por asignacion_cursos con sección
+            if id_seccion:
+                cursor.execute(
+                    "SELECT id_asignacion FROM asignacion_cursos WHERE id_seccion = %s AND (id_jornada = %s OR id_jornada IS NULL) LIMIT 1",
+                    (id_seccion, id_jornada)
+                )
+                row = cursor.fetchone()
+                if row:
+                    cursor.close()
+                    conn.close()
+                    return row['id_asignacion'], id_salon
+            # 3) Fallback por asignacion_cursos (salon + jornada)
+            if id_salon:
+                cursor.execute(
+                    "SELECT id_asignacion FROM asignacion_cursos WHERE id_salon = %s AND (id_jornada = %s OR id_jornada IS NULL) LIMIT 1",
+                    (id_salon, id_jornada)
+                )
+                row = cursor.fetchone()
+                if row:
+                    cursor.close()
+                    conn.close()
+                    return row['id_asignacion'], id_salon
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print('Error resolving asignacion for camera', cam_id, e)
+    return None, None
+
+
+def registrar_asistencia(id_persona, id_asignacion):
+    """Registra una asistencia para la persona en la asignacion dada.
+    Crea inscripcion si no existe y luego inserta en `asistencias`.
+    """
+    if not id_asignacion:
+        return False
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # Obtener rol_persona (estudiante)
+        # roles_persona in your schema may not have tipo_persona; try both selection strategies
+        cursor.execute("SELECT id_rol_persona FROM roles_persona WHERE id_persona = %s AND activo = 1 LIMIT 1", (id_persona,))
+        res = cursor.fetchone()
+        if not res:
+            cursor.close()
+            conn.close()
+            return False
+        id_rol_persona = res[0]
+        # Buscar inscripcion existente
+        cursor.execute("SELECT id_inscripcion FROM inscripciones WHERE id_rol_persona = %s AND id_asignacion = %s LIMIT 1", (id_rol_persona, id_asignacion))
+        row = cursor.fetchone()
+        if row:
+            id_inscripcion = row[0]
+        else:
+            # crear inscripcion automática (fecha actual)
+            cursor.execute("INSERT INTO inscripciones (id_rol_persona, id_asignacion, fecha_inscripcion) VALUES (%s, %s, %s)", (id_rol_persona, id_asignacion, date.today()))
+            id_inscripcion = cursor.lastrowid
+            conn.commit()
+
+        # Evitar duplicar asistencias en un intervalo corto (ej. 10 minutos)
+        cutoff = datetime.now() - timedelta(minutes=10)
+        cursor.execute("SELECT COUNT(*) FROM asistencias WHERE id_inscripcion = %s AND fecha >= %s", (id_inscripcion, cutoff))
+        exists_recent = cursor.fetchone()[0]
+        if exists_recent and exists_recent > 0:
+            cursor.close()
+            conn.close()
+            return False
+
+        # Insertar asistencia
+        cursor.execute("INSERT INTO asistencias (id_inscripcion, estado, fecha) VALUES (%s, %s, %s)", (id_inscripcion, 'presente', datetime.now()))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print('Error registrando asistencia:', e)
+        try:
+            cursor.close()
+            conn.close()
+        except Exception:
+            pass
+        return False
 
 
 def open_camera(source):
@@ -188,8 +315,15 @@ def camera_loop(cam_id, source):
                         try:
                             ubicacion_real = CAMERAS[cam_id]['ubicacion']
                             registrar_entrada(pid, ubicacion=ubicacion_real)
+                            # actualizar timestamp y registrar asistencia vinculada a asignacion (si existe)
                             with state_lock:
                                 cam_state[cam_id]['last_log_time'][pid] = now_ts
+                            try:
+                                id_asignacion, id_salon = resolve_asignacion_for_camera(cam_id, datetime.now())
+                                if id_asignacion:
+                                    registrar_asistencia(pid, id_asignacion)
+                            except Exception as e:
+                                print(f'[{cam_id}] Error registrando asistencia automática:', e)
                         except Exception as e:
                             print(f'[{cam_id}] Error registrando entrada:', e)
                     frame_match = {
@@ -262,7 +396,7 @@ def register_reconocimiento_routes(app):
         if cam_id not in CAMERAS:
             return 'Cámara no existe', 404
         usuario = obtener_usuario_sesion()
-        return render_template('monitor.html', cam_id=cam_id, nombre_cam=CAMERAS[cam_id]['nombre'], usuario=usuario)
+        return render_template('monitor.html', cam_id=cam_id, nombre_cam=CAMERAS[cam_id].get('nombre'), usuario=usuario)
 
     @app.route('/cameras_status')
     def cameras_status():
@@ -271,13 +405,77 @@ def register_reconocimiento_routes(app):
             for cam_id in CAMERAS.keys():
                 out[cam_id] = {
                     'source': CAMERAS[cam_id],
-                    'has_frame': cam_state[cam_id]['latest_jpeg'] is not None,
-                    'last_match_ts': cam_state[cam_id]['latest_match'].get('timestamp'),
+                    'has_frame': cam_state.get(cam_id, {}).get('latest_jpeg') is not None,
+                    'last_match_ts': cam_state.get(cam_id, {}).get('latest_match', {}).get('timestamp'),
                 }
         return jsonify(out)
 
+    @app.route('/api/cameras')
+    def api_cameras():
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        cur.execute('SELECT cam_id, nombre, source, id_sede, descripcion FROM camaras')
+        rows = cur.fetchall()
+        cur.close(); conn.close()
+        return jsonify(rows)
+
+    @app.route('/api/refresh_cameras')
+    def api_refresh_cameras():
+        # reload CAMERAS from DB
+        try:
+            load_cameras_from_db()
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+
 
 def start_camera_threads():
+    # load cameras from DB before starting threads
+    try:
+        load_cameras_from_db()
+    except Exception:
+        pass
     for cam_id, cam_data in CAMERAS.items():
-        t = threading.Thread(target=camera_loop, args=(cam_id, cam_data['source']), daemon=True)
+        t = threading.Thread(target=camera_loop, args=(cam_id, cam_data.get('source')), daemon=True)
         t.start()
+
+
+def load_cameras_from_db():
+    global CAMERAS
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute('SELECT cam_id, nombre, source, id_sede, descripcion FROM camaras')
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+    cams = {}
+    for r in rows:
+        cams[r['cam_id']] = {
+            'nombre': r.get('nombre'),
+            'ubicacion': r.get('nombre'),
+            'source': r.get('source'),
+            'id_sede': r.get('id_sede'),
+            'descripcion': r.get('descripcion')
+        }
+    CAMERAS = cams
+    # re-init cam_state for new cameras
+    with state_lock:
+        for cam_id in list(cam_state.keys()):
+            if cam_id not in CAMERAS:
+                cam_state.pop(cam_id, None)
+        for cam_id in CAMERAS.keys():
+            if cam_id not in cam_state:
+                cam_state[cam_id] = {
+                    'latest_jpeg': None,
+                    'latest_match': {
+                        'matched': False,
+                        'id_persona': None,
+                        'nombre': None,
+                        'apellido': None,
+                        'carnet': None,
+                        'correo': None,
+                        'dist': None,
+                        'timestamp': None,
+                        'cam_id': cam_id,
+                    },
+                    'last_log_time': last_log_time,
+                }

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0"><i class="bi bi-plus-circle"></i> Nuevo Salón</h2>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6 mx-auto">
+            <div class="card shadow">
+                <div class="card-body p-5">
+                    <form method="post">
+                        <div class="mb-3">
+                            <label class="form-label">Nombre del Salón *</label>
+                            <input type="text" name="nombre" class="form-control" placeholder="ej: Aula 101" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Capacidad *</label>
+                            <input type="number" name="capacidad" class="form-control" value="40" min="1" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Sede *</label>
+                            <select name="id_sede" class="form-select" required>
+                                <option value="">-- Seleccionar --</option>
+                                {% for sede in sedes %}
+                                <option value="{{ sede.id_sede }}">{{ sede.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-check-circle"></i> Crear Salón
+                            </button>
+                            <a href="{{ url_for('salones_list') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
