@@ -85,7 +85,7 @@
                         <select name="sede" class="form-select" required>
                             <option value="">Seleccione...</option>
                             {% for sede in sede_options %}
-                            <option value="{{ sede.id_sede }}" {{ 'selected' if form_data is defined and form_data.sede == sede.id_sede|string else '' }}>{{ sede.nombre }}</option>
+                            <option value="{{ sede.id_sede }}" {{ 'selected' if form_data is defined and (form_data.sede|int) == sede.id_sede else '' }}>{{ sede.nombre }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -115,7 +115,7 @@
                         <select name="id_jornada" class="form-select">
                             <option value="">Seleccione...</option>
                             {% for j in jornadas_options %}
-                                <option value="{{ j.id_jornada }}" {{ 'selected' if form_data is defined and form_data.id_jornada == j.id_jornada|string else '' }}>{{ j.nombre }}</option>
+                                <option value="{{ j.id_jornada }}" {{ 'selected' if form_data is defined and (form_data.id_jornada|int) == j.id_jornada else '' }}>{{ j.nombre }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -204,7 +204,7 @@
 ========================= */
 const video = document.getElementById("video");
 const ipcam = document.getElementById("ipcam");
-const IPCAM_URL = "http://192.168.1.229:4747/video"; // Cambia esta IP según tu red
+const IPCAM_URL = "http://192.168.1.85:4747/video"; // Cambia esta IP según tu red
 
 let currentStream = null;
 

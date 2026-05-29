@@ -1,0 +1,42 @@
+-- Seed SQL extracted from Biometria.sql (omitiendo INSERTs para la tabla `personas`)
+-- Nota: se deshabilitan temporalmente las comprobaciones de FK para permitir insertar todas las filas sin errores.
+SET FOREIGN_KEY_CHECKS=0;
+-- carreras
+INSERT INTO `carreras` VALUES (1,'Ingeniería en Sistemas',NULL),(2,'Derecho',NULL),(3,'Medicina',NULL);
+
+-- cursos
+INSERT INTO `cursos` VALUES (5,'Programación I','SIS101',5,1),(6,'Base de Datos I','SIS102',4,1),(7,'Física I','SIS103',5,1),(8,'Derecho Penal','DER101',4,2);
+
+-- jornadas
+INSERT INTO `jornadas` VALUES (1,'Matutina',NULL),(2,'Vespertina',NULL),(3,'Nocturna',NULL),(4,'Sabado',NULL),(36,'Domingo',NULL);
+
+-- jornadas_sedes
+INSERT INTO `jornadas_sedes` VALUES (4,36,1);
+
+-- roles
+INSERT INTO `roles` VALUES (1,'administrativo'),(2,'catedratico'),(5,'coordinador'),(3,'estudiante'),(4,'seguridad');
+
+-- roles_persona
+INSERT INTO `roles_persona` VALUES (1,2,1,NULL),(2,3,1,NULL),(3,4,1,NULL);
+
+-- salones
+INSERT INTO `salones` VALUES (1,'Salon 306',40,1,'305','Edificio A','None',1,4),(2,'Salon 306',40,1,'306','Edificio A','None',1,36),(3,'salon 305',40,1,'305','Edificio A','',1,36);
+
+-- secciones
+INSERT INTO `secciones` VALUES (1,'A'),(2,'B'),(3,'C'),(4,'D');
+
+-- sede_carrera
+INSERT INTO `sede_carrera` VALUES (1,1,1),(2,1,2);
+
+-- sedes
+INSERT INTO `sedes` VALUES (1,'UMG Boca del Monte',NULL,NULL),(2,'UMG Villa Nueva',NULL,NULL),(3,'UMG Antigua Guatemala',NULL,NULL);
+
+-- sedes_carreras_jornadas
+INSERT INTO `sedes_carreras_jornadas` VALUES (1,1,36);
+
+-- usuarios
+INSERT INTO `usuarios` VALUES (1,2,'admin@example.com','scrypt:32768:8:1$XqeGMgjrSfsSr2Ku$583b715fe67f2ddcf2b5c2f7e58bf964bf9aaecdecafc11f28adf980f95d1119d03dc81edb4461439eb883c4118e8da883c9908be35c1d9e21ebcd82d915d362',NULL),(2,3,'admin','scrypt:32768:8:1$EQSkR9wJ3pyuICJb$4afea7f1d02b49e1dfbb13b837f472ef8bc37d8a8f942258246599e801b2bcc0efbdaf3970f12e7d79d5f6c3d5901d4d74bf350252833b5dd5f3fc076c732f1a',NULL),(3,4,'admin1','scrypt:32768:8:1$Z038J4SluIhuEcvt$963758fbcfa61ee2f5e99fd29b6434885cc788fa97330c36916c4d25b639af1b2e870425e122d449ecac0db282c9a817de9ff8248040d41e212c47f943931c42',NULL);
+
+SET FOREIGN_KEY_CHECKS=1;
+
+-- Fin del archivo: INSERTs extraídos omitiendo la tabla `personas`.

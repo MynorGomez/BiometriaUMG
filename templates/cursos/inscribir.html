@@ -36,6 +36,16 @@
             </form>
 
             {% if selected_section %}
+            {% if skipped %}
+            <div class="alert alert-warning">
+                <strong>Omitidos:</strong>
+                <ul class="mb-0">
+                    {% for s in skipped %}
+                    <li>{{ s[1] or ('ID ' ~ s[0]) }} - {% if s[2] == 'no_role' %}No tiene rol de estudiante activo{% elif s[2] == 'no_asignacion' %}Asignación no encontrada{% elif s[2] == 'jornada_mismatch' %}Jornada incompatible con la asignación{% elif s[2] == 'insert_error' %}Error al guardar inscripción{% else %}Omitido (motivo desconocido){% endif %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
             <form method="POST">
                 <input type="hidden" name="seccion" value="{{ selected_section }}">
                 <table class="table table-bordered table-hover">

@@ -69,11 +69,60 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-success">Asignar curso</button>
+                <button type="submit" class="btn btn-success" onclick="debugFormData(event)">Asignar curso</button>
                 <a href="{{ url_for('listar_cursos') }}" class="btn btn-secondary">Cancelar</a>
 
             </form>
         </div>
     </div>
 </div>
+        <script>
+        function debugFormData(event) {
+            const form = event.target.closest('form');
+            const formData = new FormData(form);
+            console.log('=== DEBUG FORM SUBMISSION ===');
+            console.log('Datos enviados al servidor:');
+            for (let [key, value] of formData.entries()) {
+                console.log(`  ${key}: ${value}`);
+            }
+            console.log('============================');
+        }
+
+        async function actualizarJornadasCurso() {
+            const sedeSelect = document.querySelector('select[name="id_sede"]');
+            const carreraSelect = document.querySelector('select[name="carrera"]');
+            const jornadaSelect = document.querySelector('select[name="id_jornada"]');
+            if (!sedeSelect || !carreraSelect || !jornadaSelect) return;
+
+            const id_sede = sedeSelect.value;
+            const carrera = carreraSelect.value;
+
+            jornadaSelect.innerHTML = '<option value="">Seleccione una jornada</option>';
+            if (!id_sede || !carrera) return;
+
+            try {
+                const resp = await fetch(`/api/jornadas_por_sede_carrera?id_sede=${encodeURIComponent(id_sede)}&carrera=${encodeURIComponent(carrera)}`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const selected = '{{ form_data.get("id_jornada","") if form_data is defined else "" }}';
+                data.jornadas.forEach(j => {
+                    const opt = document.createElement('option');
+                    opt.value = j.id_jornada;
+                    opt.textContent = j.nombre;
+                    if (selected && selected === String(j.id_jornada)) opt.selected = true;
+                    jornadaSelect.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Error cargando jornadas:', e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const sedeSelect = document.querySelector('select[name="id_sede"]');
+            const carreraSelect = document.querySelector('select[name="carrera"]');
+            if (sedeSelect) sedeSelect.addEventListener('change', actualizarJornadasCurso);
+            if (carreraSelect) carreraSelect.addEventListener('change', actualizarJornadasCurso);
+            actualizarJornadasCurso();
+        });
+        </script>
 {% endblock %}

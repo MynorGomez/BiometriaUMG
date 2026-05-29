@@ -147,6 +147,16 @@
             </a>
         </li>
         <li class="mb-2">
+            <a href="{{ url_for('admin_listar_cursos') }}">
+                <i class="bi bi-list-check"></i> Gestionar Cursos
+            </a>
+        </li>
+        <li class="mb-2">
+            <a href="{{ url_for('inscribir_estudiantes_por_carnet') }}">
+                <i class="fas fa-user-graduate"></i> Inscribir Estudiantes
+            </a>
+        </li>
+        <li class="mb-2">
             <a href="{{ url_for('admin_salones') }}">
                 <i class="fas fa-door-open"></i> Salones
             </a>
@@ -159,6 +169,11 @@
         <li class="mb-2">
             <a href="{{ url_for('admin_camera_mappings') }}">
                 <i class="fas fa-map"></i> Asignaciones de cámaras
+            </a>
+        </li>
+        <li class="mb-2">
+            <a href="{{ url_for('admin_sedes_carreras_jornadas') }}">
+                <i class="fas fa-layer-group"></i> Sede-Carrera Jornadas
             </a>
         </li>
         {% elif session.get('rol') == 'catedratico' %}

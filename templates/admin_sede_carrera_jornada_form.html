@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="card shadow">
+        <div class="card-header">
+            <h4 class="mb-0">{% if mapping %}Editar Mapping{% else %}Nuevo Mapping{% endif %}</h4>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label">Sede</label>
+                    <select name="id_sede" id="select-sede" class="form-select" required>
+                        <option value="">-- Seleccione --</option>
+                        {% for s in sedes %}
+                        <option value="{{ s.id_sede }}" {% if mapping and mapping.id_sede == s.id_sede %}selected{% endif %}>{{ s.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Carrera</label>
+                    <select name="carrera" id="select-carrera" class="form-select" required>
+                        <option value="">-- Seleccione --</option>
+                        {% for c in carreras %}
+                        <option value="{{ c }}" {% if mapping and mapping.carrera_nombre == c %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Jornada</label>
+                    <select name="id_jornada" id="select-jornada" class="form-select" required>
+                        <option value="">-- Seleccione --</option>
+                        {% for j in jornadas %}
+                        <option value="{{ j.id_jornada }}" {% if mapping and mapping.id_jornada == j.id_jornada %}selected{% endif %}>{{ j.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button class="btn btn-primary">Guardar</button>
+                <a href="{{ url_for('admin_sedes_carreras_jornadas') }}" class="btn btn-secondary">Cancelar</a>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('select-sede').addEventListener('change', function(){
+    const id_sede = this.value;
+    const carreraSelect = document.getElementById('select-carrera');
+    carreraSelect.innerHTML = '<option value="">-- Cargando --</option>';
+    if(!id_sede){ carreraSelect.innerHTML = '<option value="">-- Seleccione --</option>'; return; }
+    fetch('/admin/api/carreras_por_sede?id_sede='+id_sede)
+    .then(r=>r.json()).then(data=>{
+        carreraSelect.innerHTML = '<option value="">-- Seleccione --</option>';
+        data.carreras.forEach(function(c){
+            const opt = document.createElement('option'); opt.value = c; opt.text = c; carreraSelect.appendChild(opt);
+        });
+    }).catch(()=>{ carreraSelect.innerHTML = '<option value="">-- Error cargando --</option>'; });
+});
+</script>
+{% endblock %}

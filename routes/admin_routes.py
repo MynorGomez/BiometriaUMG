@@ -659,6 +659,102 @@ def register_admin_routes(app):
             cursor.close(); conn.close()
         return redirect(url_for('admin_camera_mappings'))
 
+    # -------------------- Sedes-Carreras-Jornadas CRUD --------------------
+    @app.route('/admin/sedes_carreras_jornadas')
+    def admin_sedes_carreras_jornadas():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
+        cursor.execute('''
+            SELECT scj.id_sede_carrera_jornada, se.nombre AS sede, ca.nombre AS carrera, j.id_jornada, j.nombre AS jornada
+            FROM sedes_carreras_jornadas scj
+            JOIN sede_carrera sc ON scj.id_sede_carrera = sc.id_sede_carrera
+            JOIN sedes se ON sc.id_sede = se.id_sede
+            JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+            JOIN jornadas j ON scj.id_jornada = j.id_jornada
+            ORDER BY se.nombre, ca.nombre, j.nombre
+        ''')
+        rows = cursor.fetchall()
+        cursor.close(); conn.close()
+        return render_template('admin_sedes_carreras_jornadas.html', rows=rows)
+
+    @app.route('/admin/sedes_carreras_jornadas/nuevo', methods=['GET', 'POST'])
+    def admin_scj_nuevo():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
+        if request.method == 'POST':
+            id_sede = request.form.get('id_sede')
+            carrera = request.form.get('carrera')
+            id_jornada = request.form.get('id_jornada')
+            if not id_sede or not carrera or not id_jornada:
+                flash('Sede, carrera y jornada son obligatorios.', 'warning')
+                cursor.close(); conn.close(); return redirect(url_for('admin_scj_nuevo'))
+            id_sede_carrera = get_sede_carrera_id(id_sede, carrera)
+            if not id_sede_carrera:
+                flash('La combinación sede-carrera no es válida.', 'warning')
+                cursor.close(); conn.close(); return redirect(url_for('admin_scj_nuevo'))
+            try:
+                cursor.execute('INSERT INTO sedes_carreras_jornadas (id_sede_carrera, id_jornada) VALUES (%s,%s)', (id_sede_carrera, id_jornada))
+                conn.commit(); flash('Mapping guardado.', 'success')
+                cursor.close(); conn.close(); return redirect(url_for('admin_sedes_carreras_jornadas'))
+            except Exception as e:
+                conn.rollback(); flash(f'Error: {e}', 'danger')
+                cursor.close(); conn.close(); return redirect(url_for('admin_scj_nuevo'))
+        # GET
+        cursor.execute('SELECT id_sede, nombre FROM sedes ORDER BY nombre')
+        sedes = cursor.fetchall()
+        cursor.close(); conn.close()
+        return render_template('admin_sede_carrera_jornada_form.html', sedes=sedes, jornadas=get_jornadas_options(), carreras=[])
+
+    @app.route('/admin/sedes_carreras_jornadas/<int:id_scj>/editar', methods=['GET', 'POST'])
+    def admin_scj_editar(id_scj):
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor(dictionary=True)
+        if request.method == 'POST':
+            id_jornada = request.form.get('id_jornada')
+            try:
+                cursor.execute('UPDATE sedes_carreras_jornadas SET id_jornada=%s WHERE id_sede_carrera_jornada=%s', (id_jornada, id_scj))
+                conn.commit(); flash('Mapping actualizado.', 'success')
+                cursor.close(); conn.close(); return redirect(url_for('admin_sedes_carreras_jornadas'))
+            except Exception as e:
+                conn.rollback(); flash(f'Error: {e}', 'danger')
+                cursor.close(); conn.close(); return redirect(url_for('admin_sedes_carreras_jornadas'))
+        cursor.execute('''
+            SELECT scj.id_sede_carrera_jornada, sc.id_sede, sc.id_carrera, ca.nombre AS carrera_nombre, j.id_jornada
+            FROM sedes_carreras_jornadas scj
+            JOIN sede_carrera sc ON scj.id_sede_carrera = sc.id_sede_carrera
+            JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+            JOIN jornadas j ON scj.id_jornada = j.id_jornada
+            WHERE scj.id_sede_carrera_jornada = %s
+        ''', (id_scj,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); conn.close(); flash('Mapping no encontrado.', 'warning'); return redirect(url_for('admin_sedes_carreras_jornadas'))
+        # fetch sedes and carreras for the sede
+        cursor.execute('SELECT id_sede, nombre FROM sedes ORDER BY nombre')
+        sedes = cursor.fetchall()
+        # get carreras for this sede
+        carreras = get_carreras_for_sede(row['id_sede'])
+        jornadas = get_jornadas_options()
+        cursor.close(); conn.close()
+        return render_template('admin_sede_carrera_jornada_form.html', sedes=sedes, carreras=carreras, jornadas=jornadas, mapping=row)
+
+    @app.route('/admin/sedes_carreras_jornadas/<int:id_scj>/eliminar', methods=['POST'])
+    def admin_scj_eliminar(id_scj):
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+        conn = get_db_connection(); cursor = conn.cursor()
+        try:
+            cursor.execute('DELETE FROM sedes_carreras_jornadas WHERE id_sede_carrera_jornada=%s', (id_scj,))
+            conn.commit(); flash('Mapping eliminado.', 'success')
+        except Exception as e:
+            conn.rollback(); flash(f'Error eliminando: {e}', 'danger')
+        finally:
+            cursor.close(); conn.close()
+        return redirect(url_for('admin_sedes_carreras_jornadas'))
+
     # -------------------- Horarios CRUD (básico) --------------------
     @app.route('/admin/horarios')
     def admin_horarios():

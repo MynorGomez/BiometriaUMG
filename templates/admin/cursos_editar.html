@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0">
+                        <i class="bi bi-pencil-square"></i> Editar Curso
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_editar_curso', id_curso=curso.id_curso) }}">
+                        <div class="mb-3">
+                            <label class="form-label"><strong>ID del Curso</strong></label>
+                            <input type="text" class="form-control" value="{{ curso.id_curso }}" disabled>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="nombre" class="form-label"><strong>Nombre del Curso *</strong></label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" 
+                                   value="{{ curso.nombre }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="codigo" class="form-label"><strong>Código del Curso *</strong></label>
+                            <input type="text" class="form-control" id="codigo" name="codigo" 
+                                   value="{{ curso.codigo }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="creditos" class="form-label"><strong>Créditos</strong></label>
+                            <input type="number" class="form-control" id="creditos" name="creditos" 
+                                   value="{{ curso.creditos }}" min="0">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="id_sede_carrera" class="form-label"><strong>Sede - Carrera *</strong></label>
+                            <select class="form-control" id="id_sede_carrera" name="id_sede_carrera" required>
+                                <option value="">-- Seleccionar --</option>
+                                {% for opcion in sede_carrera_options %}
+                                    <option value="{{ opcion.id_sede_carrera }}" 
+                                            {% if curso.id_sede_carrera == opcion.id_sede_carrera %}selected{% endif %}>
+                                        {{ opcion.display_name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-check-circle"></i> Actualizar
+                            </button>
+                            <a href="{{ url_for('admin_listar_cursos') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

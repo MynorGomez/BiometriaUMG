@@ -14,7 +14,62 @@ def register_docente_routes(app):
         if session.get('rol') != 'catedratico':
             return redirect(url_for('login'))
         usuario = obtener_usuario_sesion()
-        return render_template('catedratico/mis_cursos.html', usuario=usuario)
+        if not usuario:
+            flash('Debe iniciar sesión.', 'danger')
+            return redirect(url_for('login'))
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute('SELECT id_persona FROM usuarios WHERE id_usuario = %s', (session.get('user_id'),))
+        fila = cursor.fetchone()
+        if not fila:
+            cursor.close()
+            conn.close()
+            flash('No se encontró el usuario.', 'danger')
+            return redirect(url_for('login'))
+        id_catedratico = fila['id_persona']
+        cursor.close()
+        cursor = conn.cursor(dictionary=True)
+        rp_cols = get_roles_persona_schema()
+        if 'id_rol' in rp_cols:
+            activo_clause = get_active_role_clause('r')
+            cursor.execute(f"""
+                SELECT DISTINCT c.id_curso,
+                       c.nombre AS nombre_curso,
+                       ca.nombre AS carrera,
+                       s.nombre AS seccion
+                FROM cursos c
+                JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
+                JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
+                JOIN roles ro ON r.id_rol = ro.id_rol
+                JOIN secciones s ON ac.id_seccion = s.id_seccion
+                JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
+                JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+                WHERE r.id_persona = %s
+                  AND ro.nombre = 'catedratico'
+                  {activo_clause}
+                ORDER BY c.nombre
+            """, (id_catedratico,))
+        else:
+            cursor.execute("""
+                SELECT DISTINCT c.id_curso,
+                       c.nombre AS nombre_curso,
+                       ca.nombre AS carrera,
+                       s.nombre AS seccion
+                FROM cursos c
+                JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
+                JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
+                JOIN secciones s ON ac.id_seccion = s.id_seccion
+                JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
+                JOIN carreras ca ON sc.id_carrera = ca.id_carrera
+                WHERE r.id_persona = %s
+                  AND r.tipo_persona = 'catedratico'
+                  AND r.activo = 1
+                ORDER BY c.nombre
+            """, (id_catedratico,))
+        cursos = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return render_template('catedratico/mis_cursos.html', cursos=cursos, usuario=usuario)
 
     @app.route('/mis_cursos')
     def mis_cursos():

@@ -83,6 +83,14 @@ def register_registro_routes(app):
                 flash('Sede inválida. Seleccione una opción válida.', 'danger')
                 form_data['fotografia'] = imagen_base64 or ''
                 return render_template('registrar.html', form_data=form_data, retake_photo=True, usuario=usuario, carrera_options=[], seccion_options=seccion_options, sede_options=sede_options, jornadas_options=jornadas_options)
+            # validar que la jornada seleccionada pertenece a la sede+carrera
+            if sede and carrera and id_jornada:
+                allowed = get_jornadas_for_sede_carrera(sede, carrera) or []
+                allowed_ids = [str(j['id_jornada']) for j in allowed]
+                if str(id_jornada) not in allowed_ids:
+                    flash('Jornada inválida para la sede y carrera seleccionadas.', 'danger')
+                    form_data['fotografia'] = imagen_base64 or ''
+                    return render_template('registrar.html', form_data=form_data, retake_photo=True, usuario=usuario, carrera_options=[], seccion_options=seccion_options, sede_options=sede_options, jornadas_options=allowed or jornadas_options)
             if not correo.endswith('@miumg.edu.gt'):
                 flash('Debe usar correo institucional @miumg.edu.gt', 'danger')
                 return redirect(url_for('registrar_persona'))
@@ -96,7 +104,7 @@ def register_registro_routes(app):
             except Exception:
                 flash('Error procesando la imagen. Vuelva a tomar la fotografía.', 'danger')
                 form_data['fotografia'] = ''
-                return render_template('registrar.html', form_data=form_data, retake_photo=True, usuario=usuario, carrera_options=[], seccion_options=get_seccion_options(carrera), jornadas_options=jornadas_options)
+                return render_template('registrar.html', form_data=form_data, retake_photo=True, usuario=usuario, carrera_options=[], seccion_options=get_seccion_options(carrera), sede_options=sede_options, jornadas_options=jornadas_options)
 
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
@@ -216,9 +224,9 @@ def register_registro_routes(app):
         jornadas_options = get_jornadas_options()
         return render_template('registrar.html', usuario=usuario, carrera_options=[], seccion_options=[], sede_options=sede_options, jornadas_options=jornadas_options)
 
-        @app.route('/api/jornadas_por_sede_carrera')
-        def api_jornadas_por_sede_carrera():
-            id_sede = request.args.get('id_sede')
-            carrera = request.args.get('carrera')
-            jornadas = get_jornadas_for_sede_carrera(id_sede, carrera) if id_sede and carrera else []
-            return jsonify({'jornadas': jornadas})
+    @app.route('/api/jornadas_por_sede_carrera')
+    def api_jornadas_por_sede_carrera():
+        id_sede = request.args.get('id_sede')
+        carrera = request.args.get('carrera')
+        jornadas = get_jornadas_for_sede_carrera(id_sede, carrera) if id_sede and carrera else []
+        return jsonify({'jornadas': jornadas})
