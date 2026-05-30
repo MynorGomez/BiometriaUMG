@@ -31,6 +31,52 @@ from helpers import (
 )
 from pdf_utils import generate_id_card_pdf, send_email_with_pdf
 
+def validar_calidad_fotografia(imagen_bytes):
+    errores = []
+
+    nparr = np.frombuffer(imagen_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if img is None:
+        return ["No se pudo leer la imagen capturada."]
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    brillo = np.mean(gray)
+    if brillo < 60:
+        errores.append("La fotografía tiene poca iluminación.")
+
+    nitidez = cv2.Laplacian(gray, cv2.CV_64F).var()
+    if nitidez < 100:
+        errores.append("La fotografía está desenfocada.")
+
+    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    rostros = face_recognition.face_locations(rgb, model="hog")
+
+    if len(rostros) == 0:
+        errores.append("No se detectó ningún rostro.")
+    elif len(rostros) > 1:
+        errores.append("Solo debe aparecer una persona en la fotografía.")
+    else:
+        top, right, bottom, left = rostros[0]
+
+        ancho_rostro = right - left
+        alto_rostro = bottom - top
+
+        if ancho_rostro < 100 or alto_rostro < 100:
+            errores.append("El rostro está demasiado lejos de la cámara.")
+
+        alto_img, ancho_img = img.shape[:2]
+        centro_x = (left + right) / 2
+        centro_y = (top + bottom) / 2
+
+        if abs(centro_x - ancho_img / 2) > ancho_img * 0.30:
+            errores.append("El rostro debe estar centrado horizontalmente.")
+
+        if abs(centro_y - alto_img / 2) > alto_img * 0.30:
+            errores.append("El rostro debe estar centrado verticalmente.")
+
+    return errores
 
 def register_registro_routes(app):
     @app.route('/registrar', methods=['GET', 'POST'])
@@ -101,6 +147,21 @@ def register_registro_routes(app):
                 flash('Debe capturar la fotografía', 'danger')
                 form_data['fotografia'] = ''
                 return render_template('registrar.html', form_data=form_data, retake_photo=True, usuario=usuario, carrera_options=[], seccion_options=get_seccion_options(carrera), sede_options=sede_options, jornadas_options=jornadas_options)
+            errores_calidad = validar_calidad_fotografia(imagen_bytes)
+
+            if errores_calidad:
+                flash('Fotografía rechazada: ' + ' '.join(errores_calidad), 'danger')
+                form_data['fotografia'] = ''
+                return render_template(
+                'registrar.html',
+        form_data=form_data,
+        retake_photo=True,
+        usuario=usuario,
+        carrera_options=[],
+        seccion_options=get_seccion_options(carrera),
+        sede_options=sede_options,
+        jornadas_options=jornadas_options
+    )
             try:
                 _, encoded = imagen_base64.split(',', 1)
                 imagen_bytes = base64.b64decode(encoded)
@@ -207,7 +268,7 @@ def register_registro_routes(app):
                 )
 
             try:
-                pdf_bytes = generate_id_card_pdf(nombre, apellido, correo, imagen_bytes, carnet, id_persona, firma)
+                pdf_bytes = generate_id_card_pdf(nombre, apellido, correo, imagen_bytes, carnet, id_persona, seccion, firma)
                 if pdf_bytes:
                     send_ok, send_err = send_email_with_pdf(correo, pdf_bytes, f'carnet_{id_persona}.pdf')
                     if send_ok:

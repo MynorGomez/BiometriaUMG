@@ -2,7 +2,8 @@ import json
 import threading
 import time
 from datetime import date, datetime, timedelta
-
+import os
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|timeout;5000000"
 import cv2
 import face_recognition
 import numpy as np
@@ -116,33 +117,55 @@ if not KNOWN_ENCODINGS:
     print('⚠ No hay encodings en la base de datos (personas.activo con encoding_facial).')
 
 
-def registrar_entrada(id_persona, ubicacion):
+def registrar_entrada(id_persona, ubicacion, similitud=None):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cutoff_time = (datetime.now() - timedelta(seconds=MIN_SECONDS_BETWEEN_LOGS)).time()
-    cursor.execute(
-        """
-            SELECT COUNT(*)
-            FROM registros_entrada
-            WHERE id_persona = %s
-              AND ubicacion = %s
-              AND fecha = %s
-              AND hora >= %s
-        """,
-        (id_persona, ubicacion, date.today(), cutoff_time)
-    )
-    already_logged = cursor.fetchone()[0]
-    if already_logged == 0:
-        cursor.execute(
-            "INSERT INTO registros_entrada (id_persona, ubicacion, fecha, hora, tipo_registro) VALUES (%s, %s, %s, %s, %s)",
-            (id_persona, ubicacion, date.today(), time.strftime('%H:%M:%S'), TIPO_REGISTRO)
-        )
-        conn.commit()
-    else:
-        print(f'Entrada ya registrada recientemente para persona={id_persona} ubicacion={ubicacion}')
-    cursor.close()
-    conn.close()
 
+    try:
+        # Evitar duplicados recientes en la puerta principal
+        cutoff = datetime.now() - timedelta(seconds=MIN_SECONDS_BETWEEN_LOGS)
+
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM accesos_biometricos
+            WHERE id_persona = %s
+              AND tipo_acceso = %s
+              AND fecha_hora >= %s
+            """,
+            (id_persona, TIPO_REGISTRO, cutoff)
+        )
+
+        already_logged = cursor.fetchone()[0]
+
+        if already_logged == 0:
+            cursor.execute(
+    """
+    INSERT INTO accesos_biometricos
+        (id_persona, tipo_acceso, id_salon, fecha_hora, similitud, resultado)
+    VALUES
+        (%s, %s, %s, %s, %s, %s)
+    """,
+    (
+        id_persona,
+        'entrada_principal',
+        None,
+        datetime.now(),
+        similitud,
+        'aceptado'
+    )
+)
+            conn.commit()
+            print(f'Entrada registrada para persona={id_persona} ubicacion={ubicacion}')
+        else:
+            print(f'Entrada ya registrada recientemente para persona={id_persona}')
+
+    except Exception as e:
+        print('Error registrando entrada:', e)
+
+    finally:
+        cursor.close()
+        conn.close()
 
 def resolve_asignacion_for_camera(cam_id, ts=None):
     """Resolver una asignacion activa para la cámara en el timestamp dado.
@@ -268,11 +291,10 @@ def registrar_asistencia(id_persona, id_asignacion):
 
 
 def open_camera(source):
-    if isinstance(source, int):
-        cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
-    else:
-        cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    if str(source).isdigit():
+        return cv2.VideoCapture(int(source), cv2.CAP_DSHOW)
+
+    cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
     return cap
 
 
@@ -325,7 +347,7 @@ def camera_loop(cam_id, source):
                     if now_ts - last_ts >= MIN_SECONDS_BETWEEN_LOGS:
                         try:
                             ubicacion_real = CAMERAS[cam_id]['ubicacion']
-                            registrar_entrada(pid, ubicacion=ubicacion_real)
+                            registrar_entrada(pid, ubicacion=ubicacion_real, similitud=round(best_distance, 4))
                             # actualizar timestamp y registrar asistencia vinculada a asignacion (si existe)
                             with state_lock:
                                 cam_state[cam_id]['last_log_time'][pid] = now_ts
@@ -440,7 +462,7 @@ def register_reconocimiento_routes(app):
     def api_cameras():
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
-        cur.execute('SELECT cam_id, nombre, source, id_sede, descripcion FROM camaras ORDER BY cam_id')
+        cur.execute("SELECT cam_id, nombre, source, id_sede, descripcion FROM camaras WHERE source IS NOT NULL AND source <> ''")
         rows = cur.fetchall()
         cur.close(); conn.close()
         return jsonify(rows)
@@ -484,7 +506,7 @@ def load_cameras_from_db():
     global CAMERAS
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
-    cur.execute('SELECT cam_id, nombre, source, id_sede, descripcion FROM camaras')
+    cur.execute("SELECT cam_id, nombre, source, id_sede, descripcion FROM camaras WHERE source IS NOT NULL AND source <> ''")
     rows = cur.fetchall()
     cur.close(); conn.close()
     cams = {}

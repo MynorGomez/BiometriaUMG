@@ -37,8 +37,8 @@
                     {% if e.presente %}
                         <div class="status present">Presente</div>
                         <div class="student-meta">
-                            {{ e.ubicacion if e.ubicacion else 'Ubicación no disponible' }}
-                            {% if e.hora %} / {{ e.hora }}{% endif %}
+                            tipo: {{ e.tipo_registro }}<br>
+                            {{e.fecga_registro}}
                         </div>
                     {% else %}
                         <div class="status absent">Ausente</div>

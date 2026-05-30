@@ -23,7 +23,7 @@ def _decode_dataurl_image(dataurl: str):
     return base64.b64decode(dataurl)
 
 
-def generate_id_card_pdf(nombre, apellido, correo, foto_bytes, carnet, id_persona, firma_base64=None):
+def generate_id_card_pdf(nombre, apellido, correo, foto_bytes, carnet, id_persona, seccion="-", firma_base64=None):
     conn = None
     cursor = None
     foto_path = None
@@ -62,6 +62,9 @@ def generate_id_card_pdf(nombre, apellido, correo, foto_bytes, carnet, id_person
         pdf.set_font("Helvetica", "", 8)
         pdf.text(32.4, 29, "Carnet")
         pdf.text(32.4, 32, carnet)
+
+        pdf.text(32.4, 36, "Sección")
+        pdf.text(32.4, 39, str (seccion))
 
         firma_bytes = _decode_dataurl_image(firma_base64)
         if not firma_bytes:
@@ -160,6 +163,10 @@ def generar_pdf_asistencia(curso, docente, estudiantes, fecha_hoy):
     nombre_archivo = f"asistencia_curso_{curso['id_curso']}_{fecha_hoy}.pdf"
     ruta_pdf = os.path.join(carpeta_reportes, nombre_archivo)
 
+    total = len(estudiantes)
+    presentes = sum(1 for e in estudiantes if e["presente"])
+    ausentes = total - presentes
+
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -172,40 +179,76 @@ def generar_pdf_asistencia(curso, docente, estudiantes, fecha_hoy):
     pdf.cell(0, 10, "UNIVERSIDAD MARIANO GALVEZ", ln=True, align="C")
     pdf.cell(0, 10, "DE GUATEMALA", ln=True, align="C")
     pdf.set_font("Times", "", 13)
-    pdf.cell(0, 8, "REPORTE DE ASISTENCIA", ln=True, align="C")
-    pdf.ln(16)
+    pdf.cell(0, 8, "REPORTE FINAL DE ASISTENCIA", ln=True, align="C")
+    pdf.ln(12)
 
-    pdf.set_font("Arial", "B", 11)
+    pdf.set_font("Arial", "B", 10)
     pdf.cell(35, 8, "Curso:")
-    pdf.set_font("Arial", "", 11)
-    pdf.cell(70, 8, curso["nombre_curso"])
-    pdf.set_font("Arial", "B", 11)
-    pdf.cell(30, 8, "Carrera:")
-    pdf.set_font("Arial", "", 11)
-    pdf.cell(0, 8, curso["carrera"], ln=True)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(75, 8, str(curso.get("nombre_curso", "-")))
 
-    pdf.set_font("Arial", "B", 11)
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(25, 8, "Carrera:")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 8, str(curso.get("carrera", "-")), ln=True)
+
+    pdf.set_font("Arial", "B", 10)
     pdf.cell(35, 8, "Seccion:")
-    pdf.set_font("Arial", "", 11)
-    pdf.cell(70, 8, curso["seccion"] if curso["seccion"] else "-")
-    pdf.set_font("Arial", "B", 11)
-    pdf.cell(30, 8, "Fecha:")
-    pdf.set_font("Arial", "", 11)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(75, 8, str(curso.get("seccion", "-")))
+
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(25, 8, "Fecha:")
+    pdf.set_font("Arial", "", 10)
     pdf.cell(0, 8, str(fecha_hoy), ln=True)
 
-    pdf.set_font("Arial", "B", 11)
+    pdf.set_font("Arial", "B", 10)
     pdf.cell(35, 8, "Catedratico:")
-    pdf.set_font("Arial", "", 11)
-    pdf.cell(70, 8, f"{docente['nombre']} {docente['apellido']}")
-    pdf.set_font("Arial", "B", 11)
-    pdf.cell(30, 8, "Correo:")
-    pdf.set_font("Arial", "", 11)
-    pdf.cell(0, 8, docente["correo"], ln=True)
-    pdf.ln(16)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(75, 8, f"{docente.get('nombre', '')} {docente.get('apellido', '')}")
+
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(25, 8, "Correo:")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 8, str(docente.get("correo", "-")), ln=True)
+
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(35, 8, "Sede:")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(75, 8, str(curso.get("sede", "-")))
+
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(25, 8, "Salon:")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 8, str(curso.get("salon", "-")), ln=True)
+
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(35, 8, "Jornada:")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(75, 8, str(curso.get("jornada", "-")))
+
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(25, 8, "Horario:")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 8, str(curso.get("horario", "-")), ln=True)
+
+    pdf.ln(8)
+
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(63, 8, "Total estudiantes", 1, 0, "C")
+    pdf.cell(63, 8, "Presentes", 1, 0, "C")
+    pdf.cell(63, 8, "Ausentes", 1, 1, "C")
+
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(63, 8, str(total), 1, 0, "C")
+    pdf.cell(63, 8, str(presentes), 1, 0, "C")
+    pdf.cell(63, 8, str(ausentes), 1, 1, "C")
+
+    pdf.ln(10)
 
     pdf.set_fill_color(52, 73, 94)
     pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Arial", "B", 10)
+    pdf.set_font("Arial", "B", 9)
     pdf.cell(10, 10, "No", 1, 0, "C", True)
     pdf.cell(30, 10, "Carnet", 1, 0, "C", True)
     pdf.cell(55, 10, "Nombre", 1, 0, "C", True)
@@ -214,18 +257,18 @@ def generar_pdf_asistencia(curso, docente, estudiantes, fecha_hoy):
 
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("Arial", "", 9)
+
     for i, est in enumerate(estudiantes, start=1):
         estado = "PRESENTE" if est["presente"] else "AUSENTE"
-        nombre = est["nombre_completo"][:28]
-        correo = est["correo"][:32] if est["correo"] else ""
+        nombre = str(est.get("nombre_completo", "-"))[:28]
+        correo = str(est.get("correo", "-"))[:32] if est.get("correo") else ""
 
         pdf.cell(10, 10, str(i), 1, 0, "C")
-        pdf.cell(30, 10, str(est["carnet"]) if est["carnet"] else "-", 1, 0, "C")
+        pdf.cell(30, 10, str(est.get("carnet", "-")), 1, 0, "C")
         pdf.cell(55, 10, nombre, 1, 0, "L")
         pdf.cell(60, 10, correo, 1, 0, "L")
         pdf.cell(35, 10, estado, 1, 1, "C")
 
-    pdf.ln(10)
     pdf.output(ruta_pdf)
     return ruta_pdf, nombre_archivo
 
