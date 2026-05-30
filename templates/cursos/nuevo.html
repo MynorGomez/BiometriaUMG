@@ -69,7 +69,7 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-success" onclick="debugFormData(event)">Asignar curso</button>
+                <button type="submit" class="btn btn-success">Asignar curso</button>
                 <a href="{{ url_for('listar_cursos') }}" class="btn btn-secondary">Cancelar</a>
 
             </form>
@@ -77,17 +77,6 @@
     </div>
 </div>
         <script>
-        function debugFormData(event) {
-            const form = event.target.closest('form');
-            const formData = new FormData(form);
-            console.log('=== DEBUG FORM SUBMISSION ===');
-            console.log('Datos enviados al servidor:');
-            for (let [key, value] of formData.entries()) {
-                console.log(`  ${key}: ${value}`);
-            }
-            console.log('============================');
-        }
-
         async function actualizarJornadasCurso() {
             const sedeSelect = document.querySelector('select[name="id_sede"]');
             const carreraSelect = document.querySelector('select[name="carrera"]');

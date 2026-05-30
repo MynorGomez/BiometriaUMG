@@ -4,7 +4,10 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3>Gestión de Cursos</h3>
-        <a href="{{ url_for('crear_curso') }}" class="btn btn-primary">Asignar Curso</a>
+        <div>
+            <a href="{{ url_for('crear_curso') }}" class="btn btn-primary me-2">Asignar Curso</a>
+            <a href="{{ url_for('asignar_cursos_salon') }}" class="btn btn-secondary">Asignar varios cursos a salón</a>
+        </div>
     </div>
 
     <!-- (Buscador de Cursos eliminado por simplicidad) -->

@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="card shadow mb-4">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Asignar varios cursos a un salón</h4>
+        </div>
+        <div class="card-body">
+            <form id="salonFilterForm" method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Sede</label>
+                    <select name="id_sede" class="form-select">
+                        <option value="">Seleccione una sede</option>
+                        {% for sede in sede_options %}
+                        <option value="{{ sede.id_sede }}" {{ 'selected' if id_sede == sede.id_sede|string else '' }}>{{ sede.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Carrera</label>
+                    <select name="carrera" class="form-select">
+                        <option value="">Seleccione una carrera</option>
+                        {% for carrera_option in carrera_options %}
+                        <option value="{{ carrera_option }}" {{ 'selected' if carrera == carrera_option else '' }}>{{ carrera_option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Salón</label>
+                    <select name="id_salon" class="form-select">
+                        <option value="">Seleccione un salón</option>
+                        {% for salon in salons %}
+                        <option value="{{ salon.id_salon }}" {{ 'selected' if selected_salon and selected_salon.id_salon == salon.id_salon else '' }}>{{ salon.nombre }}{% if salon.jornada_nombre %} ({{ salon.jornada_nombre }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 align-self-end">
+                    <button type="submit" class="btn btn-secondary">Buscar salón</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if selected_salon %}
+    <div class="card shadow mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">Salón: {{ selected_salon.nombre }} - Jornada: {{ selected_salon.jornada_nombre or '-' }}</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="id_salon" value="{{ selected_salon.id_salon }}">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Sección</label>
+                        <select name="id_seccion" class="form-select" required>
+                            <option value="">Seleccione una sección</option>
+                            {% for seccion in section_options %}
+                            <option value="{{ seccion.id_seccion }}" {{ 'selected' if id_seccion == seccion.id_seccion|string else '' }}>{{ seccion.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Cursos disponibles</label>
+                    {% if course_options %}
+                    <div class="list-group">
+                        {% for curso in course_options %}
+                        <label class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>{{ curso.id_curso }} - {{ curso.nombre }}</span>
+                            <input class="form-check-input" type="checkbox" name="id_asignacion" value="{{ curso.id_asignacion }}" {{ 'checked' if curso.id_asignacion|string in selected_assignment_ids else '' }}>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning mb-0">No hay cursos disponibles para este salón.</div>
+                    {% endif %}
+                </div>
+
+                <button type="submit" class="btn btn-success">Asignar cursos al salón</button>
+                <a href="{{ url_for('listar_cursos') }}" class="btn btn-secondary">Volver a cursos</a>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Cursos ya asignados a este salón</h5>
+        </div>
+        <div class="card-body">
+            {% if assigned_courses %}
+            <table class="table table-bordered table-hover">
+                <thead>
+                    <tr>
+                        <th>Curso</th>
+                        <th>Catedrático</th>
+                        <th>Sección</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asignacion in assigned_courses %}
+                    <tr>
+                        <td>{{ asignacion.curso_nombre }}</td>
+                        <td>{{ asignacion.catedratico_nombre }}</td>
+                        <td>{{ asignacion.seccion_nombre }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="alert alert-light">Este salón aún no tiene cursos asignados.</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const filterForm = document.getElementById('salonFilterForm');
+        const salonField = document.querySelector('select[name="id_salon"]');
+        if (filterForm && salonField) {
+            salonField.addEventListener('change', function() {
+                filterForm.submit();
+            });
+        }
+    });
+</script>
+{% endblock %}

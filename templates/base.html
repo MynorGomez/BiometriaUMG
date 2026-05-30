@@ -97,6 +97,11 @@
                 <i class="fas fa-chart-line"></i> Dashboard
             </a>
         </li>
+        <li class="mb-2">
+            <a href="{{ url_for('crear_curso') }}">
+                <i class="fas fa-book"></i> Asignar Curso a Catedrático
+            </a>
+        </li>
 
         <li class="mb-2">
             <a href="{{ url_for('registrar_persona') }}">
@@ -142,13 +147,13 @@
             </a>
         </li>
         <li class="mb-2">
-            <a href="{{ url_for('crear_curso') }}">
-                <i class="fas fa-book"></i> Asignar Cursos a Docentes
+            <a href="{{ url_for('admin_listar_cursos') }}">
+                <i class="bi bi-list-check"></i> Gestionar Cursos
             </a>
         </li>
         <li class="mb-2">
-            <a href="{{ url_for('admin_listar_cursos') }}">
-                <i class="bi bi-list-check"></i> Gestionar Cursos
+            <a href="{{ url_for('asignar_cursos_salon') }}">
+                <i class="fas fa-door-open"></i> Asignar varios cursos a salón
             </a>
         </li>
         <li class="mb-2">

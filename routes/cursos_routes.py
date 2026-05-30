@@ -233,6 +233,172 @@ def register_cursos_routes(app):
             form_data=form_data
         )
 
+    @app.route('/salones/asignar-cursos', methods=['GET', 'POST'])
+    def asignar_cursos_salon():
+        if session.get('rol') != 'administrativo':
+            return redirect(url_for('login'))
+
+        usuario = obtener_usuario_sesion()
+        conexion = get_db_connection()
+        cursor = conexion.cursor(dictionary=True)
+
+        id_salon = request.values.get('id_salon', '')
+        id_sede = request.values.get('id_sede', '')
+        carrera = request.values.get('carrera', '')
+        id_seccion = request.values.get('id_seccion', '')
+        selected_assignment_ids = request.form.getlist('id_asignacion') if request.method == 'POST' else []
+
+        salons = []
+        section_options = []
+        course_options = []
+        assigned_courses = []
+        selected_salon = None
+
+        sede_options = get_sede_options()
+        carrera_options = get_carreras_for_sede(id_sede) if id_sede else []
+
+        try:
+            query = (
+                'SELECT s.id_salon, s.nombre, s.id_sede, s.id_carrera, s.id_jornada, ca.nombre AS carrera_nombre, j.nombre AS jornada_nombre '
+                'FROM salones s '
+                'LEFT JOIN carreras ca ON s.id_carrera = ca.id_carrera '
+                'LEFT JOIN jornadas j ON s.id_jornada = j.id_jornada '
+                'WHERE 1=1 '
+            )
+            params = []
+            if id_sede:
+                query += ' AND s.id_sede = %s '
+                params.append(id_sede)
+            if carrera:
+                query += ' AND ca.nombre = %s '
+                params.append(carrera)
+            query += ' ORDER BY s.nombre'
+            cursor.execute(query, tuple(params))
+            salons = cursor.fetchall()
+        except Exception:
+            salons = []
+
+        if id_salon:
+            cursor.execute(
+                'SELECT s.id_salon, s.nombre, s.id_sede, s.id_carrera, s.id_jornada, ca.nombre AS carrera_nombre, j.nombre AS jornada_nombre '
+                'FROM salones s '
+                'LEFT JOIN carreras ca ON s.id_carrera = ca.id_carrera '
+                'LEFT JOIN jornadas j ON s.id_jornada = j.id_jornada '
+                'WHERE s.id_salon = %s LIMIT 1',
+                (id_salon,)
+            )
+            selected_salon = cursor.fetchone()
+
+            if selected_salon:
+                section_options = get_seccion_options(selected_salon.get('id_sede'), selected_salon.get('carrera_nombre'))
+
+                if selected_salon.get('id_sede') and selected_salon.get('id_carrera'):
+                    course_query = (
+                        'SELECT MIN(ac.id_asignacion) AS id_asignacion, c.id_curso, c.nombre '
+                        'FROM asignacion_cursos ac '
+                        'JOIN cursos c ON ac.id_curso = c.id_curso '
+                        'JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera '
+                        'WHERE sc.id_sede = %s AND sc.id_carrera = %s '
+                    )
+                    course_params = [selected_salon['id_sede'], selected_salon['id_carrera']]
+                    if selected_salon.get('id_jornada'):
+                        course_query += ' AND (ac.id_jornada = %s OR ac.id_jornada IS NULL) '
+                        course_params.append(selected_salon['id_jornada'])
+                    course_query += ' GROUP BY c.id_curso, c.nombre ORDER BY c.nombre'
+                    cursor.execute(course_query, tuple(course_params))
+                    course_options = cursor.fetchall()
+
+                cursor.execute(
+                    'SELECT ac.id_asignacion, c.nombre AS curso_nombre, CONCAT(p.nombre, " ", p.apellido) AS catedratico_nombre, s.nombre AS seccion_nombre '
+                    'FROM asignacion_cursos ac '
+                    'JOIN cursos c ON ac.id_curso = c.id_curso '
+                    'JOIN roles_persona rp ON ac.id_rol_persona = rp.id_rol_persona '
+                    'JOIN personas p ON rp.id_persona = p.id_persona '
+                    'JOIN secciones s ON ac.id_seccion = s.id_seccion '
+                    'WHERE ac.id_salon = %s '
+                    'ORDER BY c.nombre',
+                    (id_salon,)
+                )
+                assigned_courses = cursor.fetchall()
+
+        if request.method == 'POST':
+            error = False
+            if not id_salon:
+                flash('Seleccione un salón válido.', 'danger')
+                error = True
+            if not id_seccion:
+                flash('Seleccione una sección válida.', 'danger')
+                error = True
+            if not selected_assignment_ids:
+                flash('Seleccione al menos un curso asignado.', 'danger')
+                error = True
+
+            if not error and selected_salon:
+                try:
+                    inserted = 0
+                    skipped = 0
+                    for asignacion_id in selected_assignment_ids:
+                        try:
+                            asignacion_id_int = int(asignacion_id)
+                        except Exception:
+                            continue
+                        cursor.execute(
+                            'SELECT ac.id_curso, ac.id_rol_persona '
+                            'FROM asignacion_cursos ac '
+                            'JOIN cursos c ON ac.id_curso = c.id_curso '
+                            'JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera '
+                            'WHERE ac.id_asignacion = %s AND sc.id_sede = %s AND sc.id_carrera = %s '
+                            'LIMIT 1',
+                            (asignacion_id_int, selected_salon['id_sede'], selected_salon['id_carrera'])
+                        )
+                        asignacion_row = cursor.fetchone()
+                        if not asignacion_row:
+                            continue
+                        curso_id_int = asignacion_row['id_curso']
+                        id_rol_persona = asignacion_row['id_rol_persona']
+
+                        cursor.execute(
+                            'SELECT COUNT(*) FROM asignacion_cursos WHERE id_curso = %s AND id_seccion = %s AND id_salon = %s',
+                            (curso_id_int, id_seccion, id_salon)
+                        )
+                        if cursor.fetchone()[0] > 0:
+                            skipped += 1
+                            continue
+
+                        cursor.execute(
+                            'INSERT INTO asignacion_cursos (id_curso, id_rol_persona, id_seccion, id_jornada, id_salon) VALUES (%s, %s, %s, %s, %s)',
+                            (curso_id_int, id_rol_persona, id_seccion, selected_salon.get('id_jornada'), id_salon)
+                        )
+                        inserted += 1
+
+                    conexion.commit()
+                    if inserted:
+                        flash(f'Se han asignado {inserted} curso(s) al salón.', 'success')
+                    else:
+                        flash('No se asignó ningún curso nuevo. Los cursos seleccionados ya estaban asignados o no eran válidos.', 'warning')
+                    cursor.close()
+                    conexion.close()
+                    return redirect(url_for('asignar_cursos_salon', id_salon=id_salon))
+                except Exception as e:
+                    conexion.rollback()
+                    flash(f'Error asignando cursos: {e}', 'danger')
+
+        return render_template(
+            'cursos/asignar_salon_cursos.html',
+            usuario=usuario,
+            salons=salons,
+            selected_salon=selected_salon,
+            section_options=section_options,
+            course_options=course_options,
+            assigned_courses=assigned_courses,
+            id_seccion=id_seccion,
+            selected_assignment_ids=[str(i) for i in selected_assignment_ids],
+            sede_options=sede_options,
+            carrera_options=carrera_options,
+            id_sede=id_sede,
+            carrera=carrera
+        )
+
     @app.route('/admin/cursos/crear', methods=['GET', 'POST'])
     def admin_crear_curso():
         """Crear nuevo curso en la tabla cursos"""
@@ -241,7 +407,7 @@ def register_cursos_routes(app):
 
         usuario = obtener_usuario_sesion()
         conexion = get_db_connection()
-        cursor = conexion.cursor(dictionary=True)
+        cursor = conexion.cursor()
 
         form_data = {}
 
@@ -250,9 +416,8 @@ def register_cursos_routes(app):
             codigo = request.form.get('codigo', '').strip()
             creditos = request.form.get('creditos', '0')
             id_sede_carrera = request.form.get('id_sede_carrera', '')
-            id_jornada = request.form.get('id_jornada', '')
 
-            form_data = {'nombre': nombre, 'codigo': codigo, 'creditos': creditos, 'id_sede_carrera': id_sede_carrera, 'id_jornada': id_jornada}
+            form_data = {'nombre': nombre, 'codigo': codigo, 'creditos': creditos, 'id_sede_carrera': id_sede_carrera}
 
             if not nombre:
                 flash('El nombre del curso es requerido', 'danger')
@@ -260,8 +425,6 @@ def register_cursos_routes(app):
                 flash('El código del curso es requerido', 'danger')
             elif not id_sede_carrera:
                 flash('Debe seleccionar una sede y carrera', 'danger')
-            elif not id_jornada:
-                flash('Debe seleccionar una jornada', 'danger')
             else:
                 try:
                     creditos_int = int(creditos) if creditos else 0
@@ -289,29 +452,12 @@ def register_cursos_routes(app):
         except Exception:
             sede_carrera_options = []
 
-        # Obtener jornadas con sus sedes y carreras
-        try:
-            cursor.execute('''
-                SELECT scj.id_sede_carrera_jornada, sc.id_sede_carrera, j.id_jornada, j.nombre as jornada_nombre,
-                       CONCAT(s.nombre, ' - ', c.nombre, ' - ', j.nombre) as display_name
-                FROM sedes_carreras_jornadas scj
-                JOIN sede_carrera sc ON scj.id_sede_carrera = sc.id_sede_carrera
-                JOIN jornadas j ON scj.id_jornada = j.id_jornada
-                JOIN sedes s ON sc.id_sede = s.id_sede
-                JOIN carreras c ON sc.id_carrera = c.id_carrera
-                ORDER BY s.nombre, c.nombre, j.nombre
-            ''')
-            jornada_sede_carrera_options = cursor.fetchall()
-        except Exception:
-            jornada_sede_carrera_options = []
-
         cursor.close()
         conexion.close()
 
         return render_template('admin/cursos_crear.html',
                              usuario=usuario,
                              sede_carrera_options=sede_carrera_options,
-                             jornada_sede_carrera_options=jornada_sede_carrera_options,
                              form_data=form_data)
 
     @app.route('/admin/cursos/listar', methods=['GET'])

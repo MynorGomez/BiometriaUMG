@@ -21,6 +21,52 @@
     max-width: 420px;
   }
 
+  .monitor-header{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .monitor-header .title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .camera-list{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .camera-item{
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    background: #fafafa;
+    color: #333;
+    text-decoration: none;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    font-size: 0.95rem;
+  }
+
+  .camera-item:hover{
+    background: #eef4ff;
+    border-color: #7aa7ff;
+  }
+
+  .camera-item.active{
+    border-color: #007bff;
+    background: #e7f1ff;
+    color: #0056b3;
+  }
+
   .video-box{
     border: 1px solid #ccc;
     border-radius: 10px;
@@ -59,17 +105,19 @@
 
 <div class="monitor-wrap">
 
-  <!-- IZQUIERDA: VIDEO -->
   <div class="monitor-left">
-    <a href="{{ url_for('monitor', cam_id='cam1') }}">
-  
-</a>
+    <div class="monitor-header">
+      <div class="title">Cámaras disponibles</div>
+      <div class="button-group">
+        <button id="btnReloadCameras" class="btn btn-sm btn-outline-secondary">🔄 Recargar cámaras</button>
+        <button id="btnRestartCamera" class="btn btn-sm btn-outline-secondary">🔁 Reiniciar cámara</button>
+      </div>
+    </div>
 
-<a href="{{ url_for('monitor', cam_id='cam2') }}">
- 
-</a>
+    <div id="camera-list" class="camera-list"></div>
+
     <div class="video-box">
-      <img src="/video_feed/{{ cam_id }}" alt="Video en vivo">
+      <img id="video-feed" src="/video_feed/{{ cam_id }}" alt="Video en vivo">
     </div>
   </div>
 
@@ -92,34 +140,98 @@
 </div>
 
 <script>
-async function refresh() {
-  try {
-    const res = await fetch("/last_match/{{ cam_id }}", { cache: "no-store" });
-    const data = await res.json();
+const currentCamId = "{{ cam_id }}";
 
-    const estado = document.getElementById("estado");
-    if (data.matched) {
-      estado.textContent = "RECONOCIDO";
-      estado.className = "ok mb-2";
-    } else {
-      estado.textContent = "NO RECONOCIDO";
-      estado.className = "no mb-2";
+async function loadCameraList() {
+  try {
+    const res = await fetch('/api/cameras', { cache: 'no-store' });
+    const cameras = await res.json();
+    const list = document.getElementById('camera-list');
+    list.innerHTML = '';
+
+    if (!Array.isArray(cameras) || cameras.length === 0) {
+      list.innerHTML = '<div class="text-muted">No hay cámaras registradas.</div>';
+      return;
     }
 
-    document.getElementById("id_persona").textContent = data.id_persona ?? "-";
-    document.getElementById("nombre").textContent = data.nombre ?? "-";
-    document.getElementById("apellido").textContent = data.apellido ?? "-";
-    document.getElementById("carnet").textContent = data.carnet ?? "-";
-    document.getElementById("correo").textContent = data.correo ?? "-";
-    document.getElementById("dist").textContent = data.dist ?? "-";
-    document.getElementById("ts").textContent = data.timestamp ?? "-";
+    cameras.forEach(cam => {
+      const item = document.createElement('a');
+      item.href = `/monitor/${cam.cam_id}`;
+      item.className = 'camera-item' + (cam.cam_id === currentCamId ? ' active' : '');
+      const label = cam.nombre || cam.descripcion || cam.source || cam.cam_id;
+      item.textContent = `${cam.cam_id} · ${label}`;
+      list.appendChild(item);
+    });
   } catch (e) {
-    console.log(e);
+    console.log('Error cargando lista de cámaras', e);
   }
 }
 
-setInterval(refresh, 500);
-refresh();
+async function refreshMatch() {
+  try {
+    const res = await fetch(`/last_match/${currentCamId}`, { cache: 'no-store' });
+    const data = await res.json();
+
+    const estado = document.getElementById('estado');
+    if (data.matched) {
+      estado.textContent = 'RECONOCIDO';
+      estado.className = 'ok mb-2';
+    } else {
+      estado.textContent = 'NO RECONOCIDO';
+      estado.className = 'no mb-2';
+    }
+
+    document.getElementById('id_persona').textContent = data.id_persona ?? '-';
+    document.getElementById('nombre').textContent = data.nombre ?? '-';
+    document.getElementById('apellido').textContent = data.apellido ?? '-';
+    document.getElementById('carnet').textContent = data.carnet ?? '-';
+    document.getElementById('correo').textContent = data.correo ?? '-';
+    document.getElementById('dist').textContent = data.dist ?? '-';
+    document.getElementById('ts').textContent = data.timestamp ?? '-';
+  } catch (e) {
+    console.log('Error actualizando último resultado', e);
+  }
+}
+
+async function restartCamera() {
+  const button = document.getElementById('btnRestartCamera');
+  button.disabled = true;
+  const originalText = button.textContent;
+  button.textContent = '⏳ Reiniciando...';
+  try {
+    const res = await fetch(`/api/restart_camera/${currentCamId}`);
+    const body = await res.json();
+    if (!res.ok || !body.ok) {
+      button.textContent = '⚠️ Error';
+      console.error('Restart camera error', body.error || body);
+      return;
+    }
+    const video = document.getElementById('video-feed');
+    video.src = `/video_feed/${currentCamId}?t=${Date.now()}`;
+    setTimeout(refreshMatch, 1000);
+  } catch (e) {
+    console.error('Error reiniciando cámara', e);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+async function reloadCameras() {
+  try {
+    await fetch('/api/refresh_cameras');
+  } catch (e) {
+    console.log('Error refrescando cámaras del servidor', e);
+  }
+  await loadCameraList();
+}
+
+loadCameraList();
+setInterval(loadCameraList, 5000);
+setInterval(refreshMatch, 500);
+
+document.getElementById('btnReloadCameras').addEventListener('click', reloadCameras);
+document.getElementById('btnRestartCamera').addEventListener('click', restartCamera);
 </script>
 
 {% endblock %}

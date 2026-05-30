@@ -4,10 +4,7 @@ import time
 from datetime import date, datetime, timedelta
 
 import cv2
-try:
-    import face_recognition
-except ImportError:
-    face_recognition = None
+import face_recognition
 import numpy as np
 from flask import Response, jsonify, render_template
 
@@ -35,6 +32,7 @@ JPEG_QUALITY = 45
 
 cam_state = {}
 last_log_time = {}
+camera_threads = {}
 state_lock = threading.Lock()
 
 
@@ -55,6 +53,16 @@ def init_cam_state():
             },
             'last_log_time': last_log_time,
         }
+
+
+def ensure_camera_thread(cam_id, source):
+    thread = camera_threads.get(cam_id)
+    if thread and thread.is_alive():
+        return False
+    t = threading.Thread(target=camera_loop, args=(cam_id, source), daemon=True)
+    t.start()
+    camera_threads[cam_id] = t
+    return True
 
 
 init_cam_state()
@@ -384,11 +392,21 @@ def register_reconocimiento_routes(app):
     @app.route('/video_feed/<cam_id>')
     def video_feed(cam_id):
         if cam_id not in CAMERAS:
+            try:
+                load_cameras_from_db()
+            except Exception:
+                pass
+        if cam_id not in CAMERAS:
             return 'Cámara no existe', 404
         return Response(mjpeg_generator(cam_id), mimetype='multipart/x-mixed-replace; boundary=frame')
 
     @app.route('/last_match/<cam_id>')
     def last_match(cam_id):
+        if cam_id not in CAMERAS:
+            try:
+                load_cameras_from_db()
+            except Exception:
+                pass
         if cam_id not in CAMERAS:
             return jsonify({'error': 'Cámara no existe'}), 404
         with state_lock:
@@ -396,6 +414,11 @@ def register_reconocimiento_routes(app):
 
     @app.route('/monitor/<cam_id>')
     def monitor(cam_id):
+        if cam_id not in CAMERAS:
+            try:
+                load_cameras_from_db()
+            except Exception:
+                pass
         if cam_id not in CAMERAS:
             return 'Cámara no existe', 404
         usuario = obtener_usuario_sesion()
@@ -417,17 +440,32 @@ def register_reconocimiento_routes(app):
     def api_cameras():
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
-        cur.execute('SELECT cam_id, nombre, source, id_sede, descripcion FROM camaras')
+        cur.execute('SELECT cam_id, nombre, source, id_sede, descripcion FROM camaras ORDER BY cam_id')
         rows = cur.fetchall()
         cur.close(); conn.close()
         return jsonify(rows)
 
     @app.route('/api/refresh_cameras')
     def api_refresh_cameras():
-        # reload CAMERAS from DB
+        # reload CAMERAS from DB and ensure camera threads exist
         try:
             load_cameras_from_db()
             return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+
+    @app.route('/api/restart_camera/<cam_id>')
+    def api_restart_camera(cam_id):
+        if cam_id not in CAMERAS:
+            try:
+                load_cameras_from_db()
+            except Exception:
+                pass
+        if cam_id not in CAMERAS:
+            return jsonify({'ok': False, 'error': 'Cámara no existe'}), 404
+        try:
+            restarted = ensure_camera_thread(cam_id, CAMERAS[cam_id].get('source'))
+            return jsonify({'ok': True, 'restarted': restarted})
         except Exception as e:
             return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -439,8 +477,7 @@ def start_camera_threads():
     except Exception:
         pass
     for cam_id, cam_data in CAMERAS.items():
-        t = threading.Thread(target=camera_loop, args=(cam_id, cam_data.get('source')), daemon=True)
-        t.start()
+        ensure_camera_thread(cam_id, cam_data.get('source'))
 
 
 def load_cameras_from_db():
@@ -482,3 +519,5 @@ def load_cameras_from_db():
                     },
                     'last_log_time': last_log_time,
                 }
+    for cam_id, cam_data in CAMERAS.items():
+        ensure_camera_thread(cam_id, cam_data.get('source'))
