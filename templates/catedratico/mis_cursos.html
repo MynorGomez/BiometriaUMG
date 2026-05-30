@@ -1,33 +1,88 @@
 {% extends 'base.html' %}
 
 {% block content %}
+
 <div class="container">
-    <h3 class="mb-4">Mis Cursos Asignados</h3>
+    <div class="text-center mb-4">
+        <h3 class="fw-bold">Mis Cursos Asignados</h3>
+        <p class="text-muted">Cursos asignados para el ciclo actual</p>
+    </div>
+<div class="row">
+    {% if cursos %}
+        {% for curso in cursos %}
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card shadow border-0 h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-journal-bookmark-fill me-2"></i>
+                        {{ curso.nombre_curso }}
+                    </h5>
+                </div>
 
-    <div class="row">
-        {% if cursos %}
-            {% for curso in cursos %}
-            <div class="col-md-4 mb-4">
-                <div class="card shadow h-100 border-0">
-                    <div class="card-body">
-                        <h5 class="card-title">{{ curso.nombre_curso }}</h5>
-                        <p class="mb-2"><strong>Carrera:</strong> {{ curso.carrera }}</p>
-                        <p class="mb-3"><strong>Sección:</strong> {{ curso.seccion if curso.seccion else '-' }}</p>
+                <div class="card-body">
 
-                        <a href="{{ url_for('ver_asistencia_curso', id_curso=curso.id_curso) }}" class="btn btn-primary">
+                    <p class="mb-2">
+                        <strong>Código:</strong>
+                        {{ curso.codigo if curso.codigo else 'N/D' }}
+                    </p>
+
+                    <p class="mb-2">
+                        <strong>Carrera:</strong>
+                        {{ curso.carrera }}
+                    </p>
+
+                    <p class="mb-2">
+                        <strong>Sección:</strong>
+                        {{ curso.seccion if curso.seccion else '-' }}
+                    </p>
+
+                    <p class="mb-2">
+                        <strong>Salón:</strong>
+                        {{ curso.salon if curso.salon else 'No asignado' }}
+                    </p>
+
+                    <p class="mb-2">
+                        <strong>Sede:</strong>
+                        {{ curso.sede if curso.sede else 'No asignada' }}
+                    </p>
+
+                    <p class="mb-2">
+                        <strong>Jornada:</strong>
+                        {{ curso.jornada if curso.jornada else 'No asignada' }}
+                    </p>
+
+                    <p class="mb-2">
+                        <strong>Ciclo:</strong>
+                        {{ curso.ciclo }}
+                    </p>
+
+                    <p class="mb-3">
+                        <strong>Año:</strong>
+                        {{ curso.anio }}
+                    </p>
+
+                    <div class="d-grid">
+                        <a href="{{ url_for('ver_asistencia_curso', id_curso=curso.id_curso) }}"
+                           class="btn btn-primary">
+                            <i class="bi bi-people-fill me-2"></i>
                             Ver asistencia
                         </a>
                     </div>
+
                 </div>
             </div>
-            {% endfor %}
-        {% else %}
-            <div class="col-12">
-                <div class="alert alert-info">
-                    No tiene cursos asignados actualmente.
-                </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="col-12">
+            <div class="alert alert-info text-center">
+                <i class="bi bi-info-circle-fill me-2"></i>
+                No tiene cursos asignados actualmente.
             </div>
-        {% endif %}
-    </div>
+        </div>
+    {% endif %}
+</div>
+```
+
 </div>
 {% endblock %}
