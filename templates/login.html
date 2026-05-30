@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Login - Control Biométrico</title>
+
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css?family=Poppins:600&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <script src="https://kit.fontawesome.com/a81368914c.js"></script>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+  <img src="{{ url_for('static', filename='img/wave.png') }}" class="wave" alt="">
+
+  <div class="container">
+    <div class="img">
+      <img src="{{ url_for('static', filename='img/bg.svg') }}" alt="">
+    </div>
+
+    <div class="login-content">
+      <form method="POST" id="loginForm">
+
+        <!-- AVATAR -->
+        <img src="{{ url_for('static', filename='img/avatar.jpg') }}"
+             class="avatar"
+             alt="Avatar">
+
+        <h2 class="title">INICIO</h2>
+
+        <!-- Username -->
+        <div class="input-div one">
+          <div class="i">
+            <i class="fas fa-user"></i>
+          </div>
+          <div class="div">
+            <h5>Usuario</h5>
+            <input type="text" name="username" class="input" required>
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="input-div pass">
+          <div class="i">
+            <i class="fas fa-lock"></i>
+          </div>
+          <div class="div">
+            <h5>Contraseña</h5>
+            <input type="password" name="password" class="input" required>
+          </div>
+        </div>
+
+        <input type="submit" class="btn" value="Ingresar">
+
+      </form>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loading" style="display:none;">
+    <div class="spinner"></div>
+  </div>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <script>
+      window.addEventListener("load", function () {
+        {% for category, message in messages %}
+          Swal.fire({
+            icon: "error",
+            title: "Error",
+            text: {{ message | tojson }},
+            confirmButtonColor: "#d33"
+          });
+        {% endfor %}
+      });
+    </script>
+  {% endif %}
+{% endwith %}
+
+</body>
+</html>

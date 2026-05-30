@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{% if salon %}Editar{% else %}Nuevo{% endif %} Salón</h2>
+<form method="post">
+<div class="mb-3">
+<label class="form-label">Nombre</label>
+<input class="form-control" name="nombre" value="{{ salon.nombre if salon else '' }}">
+</div>
+<div class="mb-3">
+<label class="form-label">Código</label>
+<input class="form-control" name="codigo" value="{{ salon.codigo if salon else '' }}">
+</div>
+<div class="mb-3">
+<label class="form-label">Sede</label>
+<select id="id_sede" name="id_sede" class="form-select">
+    <option value="">-- Seleccionar --</option>
+    {% for sede in sedes %}
+    <option value="{{ sede.id_sede }}" {% if salon and salon.id_sede == sede.id_sede %}selected{% endif %}>{{ sede.nombre }}</option>
+    {% endfor %}
+</select>
+</div>
+<div class="mb-3">
+<label class="form-label">Carrera</label>
+<select id="carrera" name="carrera" class="form-select" data-selected="{{ salon.carrera_nombre if salon else '' }}">
+    <option value="">-- Seleccionar --</option>
+    {% for carrera in carreras %}
+    <option value="{{ carrera }}" {% if salon and salon.carrera_nombre == carrera %}selected{% endif %}>{{ carrera }}</option>
+    {% endfor %}
+</select>
+</div>
+<div class="mb-3">
+<label class="form-label">Jornada</label>
+<select id="id_jornada" name="id_jornada" class="form-select" data-selected="{{ salon.jornada_nombre if salon else '' }}">
+    <option value="">-- Seleccionar --</option>
+    {% for jornada in jornadas %}
+    <option value="{{ jornada.id_jornada }}" {% if salon and salon.jornada_nombre == jornada.nombre %}selected{% endif %}>{{ jornada.nombre }}</option>
+    {% endfor %}
+</select>
+</div>
+<div class="mb-3">
+<label class="form-label">Ubicación</label>
+<input class="form-control" name="ubicacion" value="{{ salon.ubicacion if salon else '' }}">
+</div>
+<div class="mb-3">
+<label class="form-label">Descripción</label>
+<textarea class="form-control" name="descripcion">{{ salon.descripcion if salon else '' }}</textarea>
+</div>
+<button class="btn btn-primary" type="submit">Guardar</button>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const sedeSelect = document.getElementById('id_sede');
+    const carreraSelect = document.getElementById('carrera');
+    const savedCarrera = carreraSelect.getAttribute('data-selected');
+
+    function loadCarreras() {
+        const sedeId = sedeSelect.value;
+        if (!sedeId) {
+            carreraSelect.innerHTML = '<option value="">-- Seleccionar --</option>';
+            return;
+        }
+
+        fetch(`/admin/api/carreras_por_sede?id_sede=${encodeURIComponent(sedeId)}`)
+            .then(response => response.json())
+            .then(data => {
+                carreraSelect.innerHTML = '<option value="">-- Seleccionar --</option>';
+                if (Array.isArray(data.carreras) && data.carreras.length > 0) {
+                    data.carreras.forEach(carrera => {
+                        const option = document.createElement('option');
+                        option.value = carrera;
+                        option.textContent = carrera;
+                        if (savedCarrera && carrera === savedCarrera) {
+                            option.selected = true;
+                        }
+                        carreraSelect.appendChild(option);
+                    });
+                } else {
+                    carreraSelect.innerHTML = '<option value="">No hay carreras para esta sede</option>';
+                }
+            })
+            .catch(() => {
+                carreraSelect.innerHTML = '<option value="">Error cargando carreras</option>';
+            });
+    }
+
+    // Load carreras on page load if sede is already selected (for edit mode)
+    if (sedeSelect && carreraSelect) {
+        if (sedeSelect.value) {
+            loadCarreras();
+        }
+        sedeSelect.addEventListener('change', loadCarreras);
+    }
+});
+</script>
+{% endblock %}

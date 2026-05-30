@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Cámaras</h2>
+<a class="btn btn-primary mb-3" href="{{ url_for('admin_camaras_nuevo') }}">Nueva cámara</a>
+<table class="table table-sm">
+<thead><tr><th>ID</th><th>Nombre</th><th>Source</th><th>Sede</th><th>Acciones</th></tr></thead>
+<tbody>
+{% for c in camaras %}
+<tr>
+<td>{{ c.cam_id }}</td>
+<td>{{ c.nombre or '-' }}</td>
+<td>{{ c.source }}</td>
+<td>{{ c.id_sede or '-' }}</td>
+<td>
+<a class="btn btn-sm btn-secondary" href="{{ url_for('admin_camaras_editar', cam_id=c.cam_id) }}">Editar</a>
+<form method="post" action="{{ url_for('admin_camaras_eliminar', cam_id=c.cam_id) }}" style="display:inline;" onsubmit="return confirm('Eliminar cámara?');">
+<button class="btn btn-sm btn-danger">Eliminar</button>
+</form>
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

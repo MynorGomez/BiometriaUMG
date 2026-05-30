@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0"><i class="bi bi-door"></i> Gestión de Salones</h2>
+        <a href="{{ url_for('salon_create') }}" class="btn btn-success">
+            <i class="bi bi-plus-circle"></i> Nuevo Salón
+        </a>
+    </div>
+
+    <div class="card shadow">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Sede</th>
+                        <th>Carrera</th>
+                        <th>Jornada</th>
+                        <th>Capacidad</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if salones %}
+                        {% for s in salones %}
+                        <tr>
+                            <td><strong>{{ s.nombre }}</strong></td>
+                            <td>{{ s.sede_nombre or '-' }}</td>
+                            <td>{{ s.carrera_nombre or '-' }}</td>
+                            <td>{{ s.jornada_nombre or '-' }}</td>
+                            <td><span class="badge bg-info">{{ s.capacidad or 40 }} personas</span></td>
+                            <td><span class="badge bg-success">Disponible</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-warning" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox"></i> No hay salones registrados
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

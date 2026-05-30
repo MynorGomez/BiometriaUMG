@@ -1,0 +1,79 @@
+﻿{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Gestión de Cursos</h3>
+        <a href="{{ url_for('crear_curso') }}" class="btn btn-primary">Asignar Curso</a>
+    </div>
+
+    <!-- (Buscador de Cursos eliminado por simplicidad) -->
+
+    <!-- Listado de Cursos -->
+    {% if cursos %}
+    <div class="card shadow">
+        <div class="card-body">
+            <table class="table table-bordered table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Curso</th>
+                        <th>Carrera</th>
+                        <th>Sede</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for curso in cursos %}
+                    <tr>
+                        <td>{{ curso[1] }}</td>
+                        <td>{{ curso[2] if curso[2] else '-' }}</td>
+                        <td>{{ curso[3] if curso[3] else '-' }}</td>
+                        <td>
+                            <a href="{{ url_for('inscribir_estudiantes', id_curso=curso[0]) }}" class="btn btn-sm btn-success">
+                                Inscribir alumnos
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    {% if id_sede and carrera %}
+    <div class="alert alert-info" role="alert">
+        No hay cursos disponibles para la sede y carrera seleccionadas.
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const sedeSelect = document.querySelector('#sedeSelect');
+    const carreraSelect = document.querySelector('#carreraSelect');
+    const buscarForm = document.querySelector('#buscarForm');
+
+    if (sedeSelect) {
+        sedeSelect.addEventListener('change', (e) => {
+            if (carreraSelect) carreraSelect.innerHTML = '<option value="">Seleccione una carrera</option>';
+            const cursoSelect = document.querySelector('#cursoSelect');
+            if (cursoSelect) cursoSelect.innerHTML = '<option value="">Seleccione un curso</option>';
+
+            // Only submit when the change was initiated by the user (not programmatic)
+            if (e.isTrusted && sedeSelect.value && buscarForm) {
+                buscarForm.submit();
+            }
+        });
+    }
+
+    if (carreraSelect) {
+        carreraSelect.addEventListener('change', (e) => {
+            if (e.isTrusted && sedeSelect && sedeSelect.value && carreraSelect.value && buscarForm) {
+                buscarForm.submit();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

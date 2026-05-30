@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="card shadow">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0">Inscribir Estudiante a Cursos</h4>
+        </div>
+        <div class="card-body">
+            <!-- Búsqueda por carnet -->
+            <div class="mb-4">
+                <label class="form-label"><strong>Buscar Estudiante por Carnet</strong></label>
+                <div class="input-group">
+                    <input type="text" id="carnetInput" class="form-control" placeholder="Ingrese carnet del estudiante" autocomplete="off">
+                    <button class="btn btn-primary" type="button" id="buscarBtn">Buscar</button>
+                </div>
+            </div>
+
+            <!-- Información del estudiante (oculto inicialmente) -->
+            <div id="estudianteInfo" style="display: none;" class="mb-4">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <p><strong>Carnet:</strong> <span id="estudianteCarnet"></span></p>
+                                <p><strong>Nombre:</strong> <span id="estudianteNombre"></span></p>
+                                <p><strong>Carrera:</strong> <span id="estudianteCarrera"></span></p>
+                                <p><strong>Sede:</strong> <span id="estudianteSede"></span></p>
+                                <p><strong>Jornada:</strong> <span id="estudianteJornada"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cursos disponibles (oculto inicialmente) -->
+            <div id="cursosContainer" style="display: none;">
+                <h5 class="mb-3">Cursos Disponibles</h5>
+                
+                <!-- Alerta de no hay cursos -->
+                <div id="noCursosAlert" class="alert alert-info" style="display: none;">
+                    No hay cursos disponibles para esta combinación de sede, carrera y jornada.
+                </div>
+
+                <!-- Formulario de cursos -->
+                <form id="inscripcionForm" method="POST" action="{{ url_for('inscribir_estudiantes_guardar') }}">
+                    <input type="hidden" id="idPersona" name="id_persona">
+                    
+                    <div id="cursosList" class="mb-3">
+                        <!-- Los cursos se cargarán aquí dinámicamente -->
+                    </div>
+
+                    <!-- Resumen de inscripciones omitidas -->
+                    <div id="skippedAlert" style="display: none;" class="alert alert-warning">
+                        <strong>Omitidos:</strong>
+                        <ul id="skippedList" class="mb-0"></ul>
+                    </div>
+
+                    <div id="buttonContainer" style="display: none;" class="mt-3">
+                        <button type="submit" class="btn btn-primary">Guardar Inscripciones</button>
+                        <button type="button" class="btn btn-secondary" onclick="limpiarBusqueda()">Nueva Búsqueda</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Mensaje de error (oculto inicialmente) -->
+            <div id="errorAlert" style="display: none;" class="alert alert-danger"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const carnetInput = document.getElementById('carnetInput');
+    const buscarBtn = document.getElementById('buscarBtn');
+    const estudianteInfo = document.getElementById('estudianteInfo');
+    const cursosContainer = document.getElementById('cursosContainer');
+    const errorAlert = document.getElementById('errorAlert');
+
+    // Buscar al presionar Enter
+    carnetInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            buscarEstudiante();
+        }
+    });
+
+    buscarBtn.addEventListener('click', buscarEstudiante);
+
+    async function buscarEstudiante() {
+        const carnet = carnetInput.value.trim();
+        
+        if (!carnet) {
+            mostrarError('Ingrese un carnet válido');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/estudiante/carnet/${encodeURIComponent(carnet)}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                mostrarError(data.message || 'Estudiante no encontrado');
+                estudianteInfo.style.display = 'none';
+                cursosContainer.style.display = 'none';
+                return;
+            }
+
+            // Llenar información del estudiante
+            document.getElementById('estudianteCarnet').textContent = data.carnet;
+            document.getElementById('estudianteNombre').textContent = data.nombre_completo;
+            document.getElementById('estudianteCarrera').textContent = data.carrera;
+            document.getElementById('estudianteSede').textContent = data.sede;
+            document.getElementById('estudianteJornada').textContent = data.jornada;
+            document.getElementById('idPersona').value = data.id_persona;
+
+            errorAlert.style.display = 'none';
+            estudianteInfo.style.display = 'block';
+
+            // Cargar cursos disponibles
+            await cargarCursosDisponibles(data.id_persona);
+
+        } catch (error) {
+            console.error('Error:', error);
+            mostrarError('Error al buscar estudiante');
+        }
+    }
+
+    async function cargarCursosDisponibles(idPersona) {
+        try {
+            const response = await fetch(`/api/cursos-disponibles/${idPersona}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                mostrarError(data.message || 'Error al cargar cursos');
+                return;
+            }
+
+            const cursos = data.cursos || [];
+            const cursosList = document.getElementById('cursosList');
+            
+            if (cursos.length === 0) {
+                document.getElementById('noCursosAlert').style.display = 'block';
+                document.getElementById('buttonContainer').style.display = 'none';
+                cursosContainer.style.display = 'block';
+                return;
+            }
+
+            document.getElementById('noCursosAlert').style.display = 'none';
+            
+            // Limpiar lista anterior
+            cursosList.innerHTML = '';
+
+            // Crear tabla de cursos
+            let html = '<div class="table-responsive"><table class="table table-bordered">';
+            html += '<thead class="table-dark"><tr><th>Seleccionar</th><th>Código</th><th>Curso</th><th>Sección</th><th>Docente</th><th>Inscritos</th></tr></thead><tbody>';
+
+            cursos.forEach(curso => {
+                const estaInscrito = curso.ya_inscrito ? 'checked' : '';
+                html += `<tr>
+                    <td>
+                        <input type="checkbox" name="cursos" value="${curso.id_asignacion}" ${estaInscrito}>
+                    </td>
+                    <td>${curso.codigo_curso}</td>
+                    <td>${curso.nombre_curso}</td>
+                    <td>${curso.seccion}</td>
+                    <td>${curso.docente}</td>
+                    <td>${curso.inscritos_count}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table></div>';
+            cursosList.innerHTML = html;
+
+            document.getElementById('buttonContainer').style.display = 'block';
+            cursosContainer.style.display = 'block';
+
+        } catch (error) {
+            console.error('Error:', error);
+            mostrarError('Error al cargar cursos disponibles');
+        }
+    }
+
+    function mostrarError(mensaje) {
+        errorAlert.textContent = mensaje;
+        errorAlert.style.display = 'block';
+    }
+
+    function limpiarBusqueda() {
+        carnetInput.value = '';
+        carnetInput.focus();
+        estudianteInfo.style.display = 'none';
+        cursosContainer.style.display = 'none';
+        errorAlert.style.display = 'none';
+        document.getElementById('skippedAlert').style.display = 'none';
+    }
+</script>
+{% endblock %}

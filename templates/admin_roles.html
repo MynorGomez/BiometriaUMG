@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Administración de Personas</h2>
+
+<form method="get" class="row g-3 mb-3">
+    <div class="col-md-6">
+        <input type="text" name="q" class="form-control" placeholder="Buscar por nombre o apellido" value="{{ request.args.get('q','') }}">
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary">Buscar</button>
+    </div>
+</form>
+
+{% if results is defined %}
+    <h5>Resultados ({{ results|length }})</h5>
+    <ul class="list-group mb-3">
+    {% for p in results %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+                <strong>{{ p.nombre }} {{ p.apellido }}</strong> — {{ p.carnet or '-' }}
+                <div class="small text-muted">Roles activos: {% if p.active_roles %}{% for r in p.active_roles %}{{ r.tipo_persona }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}Ninguno{% endif %}</div>
+            </div>
+            <div>
+                <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_role_detail', id_persona=p.id_persona) }}">Gestionar</a>
+            </div>
+        </li>
+    {% endfor %}
+    </ul>
+{% endif %}
+
+{% endblock %}

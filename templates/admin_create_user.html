@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Crear Usuario</h2>
+
+<form method="post" class="row g-3">
+    <div class="col-md-6">
+        <label class="form-label">Persona</label>
+        <select name="id_persona" class="form-select" required>
+            <option value="">-- Seleccione persona --</option>
+            {% for p in personas %}
+                <option value="{{ p.id_persona }}" data-rol="{{ p.rol_activo }}">{{ p.nombre }} {{ p.apellido }} ({{ p.carnet or '-' }})</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Rol (según rol activo)</label>
+        <div>
+            <select id="role_display" class="form-select" disabled>
+                <option value="">-- Seleccione persona --</option>
+            </select>
+            <input type="hidden" name="rol" id="rol_input" />
+        </div>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Username</label>
+        <input name="username" autocomplete="username" class="form-control" required />
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Password</label>
+        <input name="password" type="password" autocomplete="new-password" class="form-control" required />
+    </div>
+    <div class="col-12">
+        <button class="btn btn-primary">Crear</button>
+        <a href="{{ url_for('dashboard_admin') }}" class="btn btn-secondary ms-2">Cancelar</a>
+    </div>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+    const personaSelect = document.querySelector('select[name="id_persona"]');
+    const roleDisplay = document.getElementById('role_display');
+    const rolInput = document.getElementById('rol_input');
+
+    personaSelect.addEventListener('change', function(){
+        const opt = personaSelect.options[personaSelect.selectedIndex];
+        const rol = opt ? opt.getAttribute('data-rol') : '';
+        // actualizar select disabled
+        roleDisplay.innerHTML = '';
+        const o = document.createElement('option');
+        o.value = rol || '';
+        o.textContent = rol ? rol.charAt(0).toUpperCase() + rol.slice(1) : '--';
+        roleDisplay.appendChild(o);
+        rolInput.value = rol || '';
+    });
+});
+</script>
+{% endblock %}

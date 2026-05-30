@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <h3 class="mb-4">Mis Cursos Asignados</h3>
+
+    <div class="row">
+        {% if cursos %}
+            {% for curso in cursos %}
+            <div class="col-md-4 mb-4">
+                <div class="card shadow h-100 border-0">
+                    <div class="card-body">
+
+                        <h5 class="card-title">{{ curso.nombre_curso }}</h5>
+
+                        <p class="mb-2">
+                            <strong>Carrera:</strong> {{ curso.carrera }}
+                        </p>
+
+                        <p class="mb-3">
+                            <strong>Sección:</strong>
+                            {{ curso.seccion if curso.seccion else '-' }}
+                        </p>
+
+                        <div class="d-grid gap-2">
+
+                            <a href="{{ url_for('ver_asistencia_curso', id_curso=curso.id_curso) }}"
+                               class="btn btn-primary">
+                                Ver asistencia
+                            </a>
+
+                            <form action="{{ url_for('confirmar_asistencia', id_curso=curso.id_curso) }}"
+                                  method="POST">
+
+                                <button type="submit"
+                                        class="btn btn-success w-100"
+                                        onclick="return confirm('¿Está seguro de confirmar la asistencia de este curso?');">
+                                    Confirmar asistencia
+                                </button>
+
+                            </form>
+                    <a href="{{ url_for('descargar_reporte_asistencia', nombre_archivo='asistencia_curso_' ~ curso.id_curso ~ '_' ~ fecha_hoy ~ '.pdf') }}"
+                    class="btn btn-danger">
+                    Generar reporte PDF
+                        </a>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12">
+                <div class="alert alert-info">
+                    No tiene cursos asignados actualmente.
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

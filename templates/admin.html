@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <h2 class="mb-4"><i class="bi bi-speedometer2"></i> Panel Administrativo</h2>
+
+    <!-- Estadísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-primary shadow">
+                <div class="card-body text-center">
+                    <i class="bi bi-people" style="font-size: 2.5rem;"></i>
+                    <h6 class="mt-3 mb-1">Total Personas</h6>
+                    <h3 class="mb-0">{{ stats.total_personas }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-success shadow">
+                <div class="card-body text-center">
+                    <i class="bi bi-book" style="font-size: 2.5rem;"></i>
+                    <h6 class="mt-3 mb-1">Estudiantes</h6>
+                    <h3 class="mb-0">{{ stats.total_estudiantes }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-info shadow">
+                <div class="card-body text-center">
+                    <i class="bi bi-person-badge" style="font-size: 2.5rem;"></i>
+                    <h6 class="mt-3 mb-1">Docentes</h6>
+                    <h3 class="mb-0">{{ stats.total_docentes }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-white bg-warning shadow">
+                <div class="card-body text-center">
+                    <i class="bi bi-door" style="font-size: 2.5rem;"></i>
+                    <h6 class="mt-3 mb-1">Cursos</h6>
+                    <h3 class="mb-0">{{ stats.total_cursos }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-4">
+
+    <!-- Personas Recientes -->
+    <div class="card p-4 shadow-sm">
+        <h4 class="mb-3">Personas Registradas Recientemente</h4>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Carnet</th>
+                        <th>Nombre Completo</th>
+                        <th>Roles</th>
+                        <th>Registrado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if recent_personas %}
+                        {% for p in recent_personas %}
+                        <tr>
+                            <td><span class="badge bg-info">{{ p.carnet or '-' }}</span></td>
+                            <td><strong>{{ p.nombre }} {{ p.apellido }}</strong></td>
+                            <td>
+                                {% if p.roles %}
+                                    {% for r in p.roles %}
+                                    <span class="badge bg-success">{{ r.nombre }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="badge bg-secondary">Sin rol</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if p.fecha_registro %}
+                                    {{ p.fecha_registro.strftime('%d/%m/%Y') }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('persona_detail', id_persona=p.id_persona) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{{ url_for('persona_edit', id_persona=p.id_persona) }}" class="btn btn-sm btn-outline-warning">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">No hay personas registradas recientemente</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

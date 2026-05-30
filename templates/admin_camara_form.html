@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{% if cam %}Editar{% else %}Nueva{% endif %} Cámara</h2>
+<form method="post">
+<div class="mb-3">
+<label class="form-label">ID (identificador)</label>
+<input class="form-control" name="cam_id" value="{{ cam.cam_id if cam else '' }}" {% if cam %}readonly{% endif %}>
+</div>
+<div class="mb-3">
+<label class="form-label">Nombre</label>
+<input class="form-control" name="nombre" value="{{ cam.nombre if cam else '' }}">
+</div>
+<div class="mb-3">
+<label class="form-label">Source (URL o índice)</label>
+<input class="form-control" name="source" value="{{ cam.source if cam else '' }}">
+</div>
+<div class="mb-3">
+<label class="form-label">Sede</label>
+<select name="id_sede" class="form-select">
+<option value="">-- Ninguna --</option>
+{% for s in sedes %}
+<option value="{{ s.id_sede }}" {% if cam and cam.id_sede==s.id_sede %}selected{% endif %}>{{ s.nombre }}</option>
+{% endfor %}
+</select>
+</div>
+<div class="mb-3">
+<label class="form-label">Descripción</label>
+<textarea class="form-control" name="descripcion">{{ cam.descripcion if cam else '' }}</textarea>
+</div>
+<button class="btn btn-primary" type="submit">Guardar</button>
+</form>
+{% endblock %}

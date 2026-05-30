@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Administración de Personas — {{ persona.nombre }} {{ persona.apellido }}</h2>
+
+<div class="card mb-3 p-3">
+    <p><strong>Carnet:</strong> {{ persona.carnet or '-' }}</p>
+    <p><strong>Correo:</strong> {{ persona.correo or '-' }}</p>
+    <p><strong>Roles activos:</strong>
+        {% if active_roles %}
+            <ul>
+            {% for r in active_roles %}
+                <li>{{ r.tipo_persona }}{% if r.carrera_nombre %} — {{ r.carrera_nombre }}{% endif %}{% if r.seccion_nombre %} / {{ r.seccion_nombre }}{% endif %}{% if r.sede_nombre %} / {{ r.sede_nombre }}{% endif %}
+                    <form method="post" action="{{ url_for('end_role_persona', id_persona=persona.id_persona, id_rol=r.id_rol_persona) }}" style="display:inline;">
+                        <button class="btn btn-sm btn-outline-danger ms-2" type="submit">Finalizar</button>
+                    </form>
+                </li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <em>Sin roles activos</em>
+        {% endif %}
+    </p>
+</div>
+
+<div class="card mb-3 p-3">
+    <h5>Promover persona</h5>
+    <form method="post" action="{{ url_for('promover_persona', id_persona=persona.id_persona) }}" class="row g-2">
+        <div class="col-md-4">
+            <select name="nuevo_rol" class="form-select">
+                <option value="catedratico">Catedrático</option>
+                <option value="administrativo">Administrativo</option>
+                <option value="estudiante">Estudiante</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <select name="carrera" class="form-select">
+                <option value="">-- Carrera --</option>
+                {% for c in carrera_options %}
+                    <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <button class="btn btn-primary">Promover</button>
+        </div>
+    </form>
+</div>
+
+{% if active_roles and active_roles|length > 0 %}
+<div class="card mb-3 p-3">
+    <h5>Actualizar Carrera / Sección / Sede</h5>
+    <form method="post" action="{{ url_for('change_role_persona', id_persona=persona.id_persona) }}" class="row g-2 role-change-form">
+        <div class="col-md-4">
+            <select name="carrera" class="form-select career-select">
+                <option value="">-- Nueva carrera --</option>
+                {% for c in carrera_options %}
+                    <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <select name="seccion" class="form-select seccion-select">
+                <option value="">-- Nueva sección --</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <select name="id_sede" class="form-select">
+                <option value="">-- Nueva sede --</option>
+                {% for s in sedes %}
+                    <option value="{{ s.id_sede }}">{{ s.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <button class="btn btn-info" type="submit">Actualizar rol</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+{% endblock %}

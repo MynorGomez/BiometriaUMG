@@ -1,0 +1,357 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-3">
+
+    <div class="text-center mb-3">
+        <h4 class="fw-bold">{{ curso.nombre_curso }}</h4>
+        <small>
+            <strong>Carrera:</strong> {{ curso.carrera }} |
+            <strong>Sección:</strong> {{ curso.seccion if curso.seccion else '-' }}
+        </small>
+    </div>
+    <div class="tree-wrapper">
+
+        <div class="root-box">
+            <div class="root-node">
+                {{ nodo_padre if nodo_padre else 'Ubicación' }}
+            </div>
+        </div>
+         <div class="line-vertical"></div>
+        {% if estudiantes|length > 1 %}
+        <div class="line-horizontal"></div>
+        {% endif %}
+        <div class="students-container {% if estudiantes|length == 1 %}single-student{% endif %}">
+            {% for e in estudiantes %}
+            <div class="student-branch">
+                <div class="branch-line"></div>
+                <div class="student-node {% if e.presente %}present-node{% else %}absent-node{% endif %}">
+                    {% if e.foto %}
+                        <img src="data:image/jpeg;base64,{{ e.foto }}" class="student-photo" alt="Foto">
+                    {% else %}
+                        <img src="{{ url_for('static', filename='img/persona.jpg') }}" class="student-photo" alt="Foto">
+                    {% endif %}
+                    <div class="student-name">{{ e.nombre_completo }}</div>
+                    <div class="student-email">{{ e.correo }}</div>
+                    <div class="student-carnet">Carnet: {{ e.carnet }}</div>
+                    {% if e.presente %}
+                        <div class="status present">Presente</div>
+                        <div class="student-meta">
+                            {{ e.ubicacion if e.ubicacion else 'Ubicación no disponible' }}
+                            {% if e.hora %} / {{ e.hora }}{% endif %}
+                        </div>
+                    {% else %}
+                        <div class="status absent">Ausente</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="text-center mt-4">
+        <form id="formConfirmar"
+              method="POST"
+              action="{{ url_for('confirmar_asistencia', id_curso=curso.id_curso) }}">
+            <button type="button"
+                    class="btn btn-success btn-lg px-4 me-2 shadow-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalConfirmarAsistencia">
+                <i class="bi bi-check-circle-fill me-2"></i>
+                Confirmar Asistencia del Curso
+            </button>
+            <a href="{{ url_for('mis_cursos') }}" class="btn btn-secondary btn-lg shadow-sm">
+                <i class="bi bi-arrow-left-circle me-2"></i>
+                Volver
+            </a>
+        </form>
+    </div>
+</div>
+<!-- Modal -->
+<div class="modal fade" id="modalConfirmarAsistencia" tabindex="-1" aria-labelledby="modalConfirmarAsistenciaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-success text-white rounded-top-4">
+                <h5 class="modal-title" id="modalConfirmarAsistenciaLabel">
+                    <i class="bi bi-shield-check me-2"></i>
+                    Confirmar asistencia
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body py-4 text-center">
+                <div class="mb-3">
+                    <i class="bi bi-envelope-paper-fill text-success" style="font-size: 3rem;"></i>
+                </div>
+                <p class="mb-2 fw-semibold">¿Está seguro de confirmar el listado de asistentes?</p>
+                <p class="text-muted mb-0">
+                    Se generará el PDF y se enviará por correo electrónico.
+                </p>
+            </div>
+            <div class="modal-footer justify-content-center border-0 pb-4">
+                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+                <button type="button" id="btnEnviarConfirmacion" class="btn btn-success px-4">
+                    <i class="bi bi-send-check-fill me-2"></i>
+                    Sí, confirmar y enviar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Overlay -->
+<div id="loadingOverlay" class="loading-overlay d-none">
+    <div class="loading-card text-center">
+        <div class="spinner-border text-success mb-3" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <h5 class="fw-bold mb-2">Procesando asistencia</h5>
+        <p class="text-muted mb-0">
+            Generando PDF y enviando correo, por favor espere...
+        </p>
+    </div>
+</div>
+<!-- Toast -->
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 3000;">
+    <div id="toastMensaje" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body" id="toastTexto">
+                Operación realizada correctamente.
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+        </div>
+    </div>
+</div>
+<style>
+.tree-wrapper{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    margin-top:20px;
+}
+.root-box{
+    display:flex;
+    justify-content:center;
+    width:100%;
+}
+.root-node{
+    background:#7280b0;
+    color:white;
+    padding:18px 40px;
+    border-radius:16px;
+    font-size:28px;
+    font-weight:700;
+    min-width:260px;
+    text-align:center;
+    box-shadow:0 8px 18px rgba(0,0,0,.15);
+}
+.line-vertical{
+    width:4px;
+    height:55px;
+    background:#5f668f;
+}
+.line-horizontal{
+    width:70%;
+    max-width:900px;
+    height:4px;
+    background:#5f668f;
+    margin-bottom:0;
+}
+.students-container{
+    width:100%;
+    max-width:1100px;
+    display:flex;
+    justify-content:space-around;
+    align-items:flex-start;
+    gap:25px;
+    margin-top:0;
+}
+.students-container.single-student{
+    justify-content:center;
+}
+.student-branch{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    flex:1;
+    max-width:320px;
+}
+.branch-line{
+    width:4px;
+    height:40px;
+    background:#5f668f;
+    margin-bottom:10px;
+}
+.student-node{
+    width:100%;
+    min-height:285px;
+    border-radius:22px;
+    padding:18px;
+    text-align:center;
+    box-shadow:0 8px 16px rgba(0,0,0,.12);
+    background:white;
+    border:3px solid transparent;
+}
+.present-node{
+    background:#dcfce7;
+    border-color:#22c55e;
+}
+.absent-node{
+    background:#fee2e2;
+    border-color:#ef4444;
+}
+.student-photo{
+    width:95px;
+    height:95px;
+    object-fit:cover;
+    border-radius:50%;
+    margin-bottom:12px;
+    border:4px solid white;
+    box-shadow:0 4px 8px rgba(0,0,0,.15);
+}
+.student-name{
+    font-size:1.05rem;
+    font-weight:700;
+    margin-bottom:6px;
+}
+.student-email{
+    font-size:.92rem;
+    word-break:break-word;
+    margin-bottom:6px;
+}
+.student-carnet{
+    font-size:.92rem;
+    margin-bottom:10px;
+}
+.status{
+    display:inline-block;
+    padding:6px 16px;
+    border-radius:999px;
+    color:white;
+    font-weight:700;
+    margin-bottom:8px;
+}
+.present{
+    background:#16a34a;
+}
+.absent{
+    background:#ef4444;
+}
+.student-meta{
+    font-size:.88rem;
+    color:#374151;
+}
+.loading-overlay{
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+}
+.loading-card{
+    background: white;
+    padding: 30px 35px;
+    border-radius: 20px;
+    box-shadow: 0 12px 30px rgba(0,0,0,.2);
+    max-width: 380px;
+    width: 90%;
+}
+@media (max-width: 768px){
+    .line-horizontal{
+        display:none;
+    }
+    .students-container{
+        flex-direction:column;
+        align-items:center;
+        margin-top:10px;
+    }
+    .branch-line{
+        height:25px;
+    }
+    .root-node{
+        font-size:22px;
+        min-width:220px;
+    }
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const btnEnviar = document.getElementById("btnEnviarConfirmacion");
+    const form = document.getElementById("formConfirmar");
+    const overlay = document.getElementById("loadingOverlay");
+    const toastElement = document.getElementById("toastMensaje");
+    const toastTexto = document.getElementById("toastTexto");
+    function mostrarToast(mensaje, tipo = "success") {
+        toastElement.classList.remove("text-bg-success", "text-bg-danger", "text-bg-warning");
+        if (tipo === "success") {
+            toastElement.classList.add("text-bg-success");
+        } else if (tipo === "danger") {
+            toastElement.classList.add("text-bg-danger");
+        } else {
+            toastElement.classList.add("text-bg-warning");
+        }
+        toastTexto.textContent = mensaje;
+        const toast = new bootstrap.Toast(toastElement, { delay: 2500 });
+        toast.show();
+    }
+    function descargarArchivo(url) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    btnEnviar.addEventListener("click", async function () {
+        btnEnviar.disabled = true;
+        btnEnviar.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Enviando...';
+        const modalElement = document.getElementById("modalConfirmarAsistencia");
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+        overlay.classList.remove("d-none");
+        try {
+            const response = await fetch(form.action, {
+                method: "POST",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            });
+            const data = await response.json();
+            overlay.classList.add("d-none");
+            if (data.success) {
+                mostrarToast(data.message, "success");
+                if (data.download_url) {
+                    descargarArchivo(data.download_url);
+                }
+                if (data.redirect_url) {
+                    setTimeout(() => {
+                        window.location.href = data.redirect_url;
+                    }, 1800);
+                }
+            } else {
+                mostrarToast(data.message || "Ocurrió un error al procesar la asistencia.", "danger");
+                if (data.redirect_url) {
+                    setTimeout(() => {
+                        window.location.href = data.redirect_url;
+                    }, 1800);
+                    return;
+                }
+                btnEnviar.disabled = false;
+                btnEnviar.innerHTML = '<i class="bi bi-send-check-fill me-2"></i>Sí, confirmar y enviar';
+            }
+        } catch (error) {
+            overlay.classList.add("d-none");
+            mostrarToast("Error de comunicación con el servidor.", "danger");
+            btnEnviar.disabled = false;
+            btnEnviar.innerHTML = '<i class="bi bi-send-check-fill me-2"></i>Sí, confirmar y enviar';
+        }
+    });
+});
+</script>
+{% endblock %}

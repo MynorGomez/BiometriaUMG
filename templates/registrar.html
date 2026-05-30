@@ -1,0 +1,552 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- MODAL NOTIFICACIÓN FLASH -->
+<div class="modal fade" id="modalFlash" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center p-4">
+            <div id="modalFlashIcon" style="font-size: 40px;"></div>
+            <h5 id="modalFlashMsg"></h5>
+        </div>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                var messages = JSON.parse('{{ messages|tojson|safe }}');
+                var modal = new bootstrap.Modal(document.getElementById('modalFlash'));
+                var icon = document.getElementById('modalFlashIcon');
+                var msg = document.getElementById('modalFlashMsg');
+                var icons = {
+                    'success': '<span class="text-success">✔</span>',
+                    'danger': '<span class="text-danger">&#9888;</span>',
+                    'warning': '<span class="text-warning">&#9888;</span>',
+                    'info': '<span class="text-info">&#8505;</span>'
+                };
+                var first = messages[0];
+                icon.innerHTML = icons[first[0]] || '';
+                msg.textContent = first[1];
+                modal.show();
+                setTimeout(function() { modal.hide(); }, 2000);
+            });
+        </script>
+    {% endif %}
+{% endwith %}
+
+<div class="container mt-4">
+    <div class="card shadow-lg p-4">
+        <h3 class="mb-4 text-center">Registro de Persona</h3>
+
+        <form method="POST" id="formRegistro">
+            <div class="row">
+
+                <!-- FORMULARIO -->
+                <div class="col-md-6">
+
+                    <div class="mb-3">
+                        <label>Nombre</label>
+                        <input type="text" name="nombre" class="form-control" required
+                               value="{{ form_data.nombre if form_data is defined else '' }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label>Apellido</label>
+                        <input type="text" name="apellido" class="form-control" required
+                               value="{{ form_data.apellido if form_data is defined else '' }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label>Teléfono</label>
+                        <input type="text" name="telefono" class="form-control"
+                               value="{{ form_data.telefono if form_data is defined else '' }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label>Correo</label>
+                        <input type="email" name="correo" class="form-control" required
+                               value="{{ form_data.correo if form_data is defined else '' }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label>Tipo de Persona</label>
+                        <select name="tipo_persona" class="form-select" required id="tipo_persona">
+                            <option value="">Seleccione...</option>
+                            <option value="estudiante" {{ 'selected' if form_data is defined and form_data.tipo_persona=='estudiante' else '' }}>Estudiante</option>
+                            <option value="catedratico" {{ 'selected' if form_data is defined and form_data.tipo_persona=='catedratico' else '' }}>Catedrático</option>
+                            <option value="administrativo" {{ 'selected' if form_data is defined and form_data.tipo_persona=='administrativo' else '' }}>Administrativo</option>
+                            <option value="operativo" {{ 'selected' if form_data is defined and form_data.tipo_persona=='operativo' else '' }}>Operativo</option>
+                        </select>
+                    </div>
+
+                     <div class="mb-3">
+    <label>Sede</label>
+
+    <select name="sede"
+            id="sede"
+            class="form-select"
+            required>
+
+        <option value="">Seleccione...</option>
+
+        {% for sede in sede_options %}
+
+        <option value="{{ sede.id_sede }}"
+            {{ 'selected'
+            if form_data is defined
+            and form_data.sede == sede.id_sede|string
+            else '' }}>
+
+            {{ sede.nombre }}
+
+        </option>
+
+        {% endfor %}
+
+    </select>
+                     </div>
+
+                    <div class="mb-3">
+                        <label>Carrera</label>
+                        <select name="carrera" class="form-select" required>
+                            <option value="">Seleccione...</option>
+                            {% for option in carrera_options %}
+                            <option value="{{ option }}" {{ 'selected' if form_data is defined and form_data.carrera == option else '' }}>{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label>Sección</label>
+                        <select name="seccion" class="form-select" required data-selected="{{ form_data.seccion if form_data is defined else '' }}">
+                            <option value="">Seleccione...</option>
+                            {% for option in seccion_options %}
+                            <option value="{{ option }}" {{ 'selected' if form_data is defined and form_data.seccion == option else '' }}>{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                     <div class="mb-3">
+                      <label>Jornada</label>
+
+                     <select name="id_jornada"
+                   id="jornada"
+                 class="form-select">
+
+                  <option value="">Seleccione...</option>
+
+                 {% for j in jornadas_options %}
+                 <option value="{{ j.id_jornada }}"
+                {{ 'selected'
+                if form_data is defined
+                and form_data.id_jornada == j.id_jornada|string
+                else '' }}>
+
+                {{ j.nombre }}
+
+            </option>
+        {% endfor %}
+
+    </select>
+                <div class="mt-3">
+    <label>Días</label>
+
+    <input type="text"
+           id="dias"
+           class="form-control"
+           readonly>
+</div>
+                    </div>
+
+                </div>
+
+                <!-- CAMARA -->
+                <div class="col-md-6 text-center">
+                    <label class="form-label">Captura de Fotografía</label>
+                    <div id="camara-container">
+                        <video id="video" width="320" height="240" autoplay class="border rounded shadow mb-3 d-none"></video>
+                        <img id="ipcam" width="320" height="240" class="border rounded shadow mb-3 d-none" crossorigin="anonymous" />
+                    </div>
+                    <br>
+                    <button type="button" class="btn btn-warning mb-2" id="btnTomarFoto">📸 Tomar Foto</button>
+                    <button type="button" class="btn btn-outline-secondary mb-2 ms-2" id="btnRefrescarCamara">🔄 Refrescar Cámara</button>
+                    <canvas id="canvas" width="320" height="240" class="d-none"></canvas>
+
+                    <!-- 👇 Si viene error de encoding, el backend la manda vacía -->
+                    <input type="hidden" name="fotografia" id="fotografia"
+                           value="{{ form_data.fotografia if form_data is defined else '' }}">
+                </div>
+
+            </div>
+
+            <!-- Campo de Firma Digital (Touchpad) -->
+            <div class="mb-3 mt-3">
+                <label>Firma (dibuje su firma con el mouse o touchpad)</label>
+                <div style="border:1px solid #ccc; border-radius:6px; width:320px; height:100px; background:#fff; position:relative;">
+                    <canvas id="firmaCanvas" width="320" height="100" style="touch-action: none; cursor: crosshair;"></canvas>
+                    <button type="button" class="btn btn-sm btn-secondary position-absolute top-0 end-0 m-1" id="limpiarFirma" tabindex="-1">Limpiar</button>
+                </div>
+
+                <!-- ✅ conservar firma si el backend re-renderiza -->
+                <input type="hidden" name="firma" id="firmaInput" required
+       value="{{ form_data.firma if form_data is defined else '' }}">
+            </div>
+
+            <div class="text-end mt-4">
+                <button type="submit" class="btn btn-primary">
+                    Registrar
+                </button>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<!-- MODAL GUARDANDO FOTO -->
+<div class="modal fade" id="modalGuardandoFoto" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center p-4">
+                <div class="spinner-border text-warning mb-3"></div>
+                <h5>Guardando foto...</h5>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL FOTO GUARDADA -->
+<div class="modal fade" id="modalFoto" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center p-4">
+                <div class="text-success mb-3" style="font-size: 40px;">✔</div>
+                <h5>Foto guardada correctamente</h5>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL GUARDANDO INFORMACIÓN -->
+<div class="modal fade"
+     id="modalGuardando"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false"
+     tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content text-center p-4">
+        <div class="spinner-border text-primary mb-3"></div>
+        <h5>Guardando información...</h5>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================
+   CÁMARA
+========================= */
+const video = document.getElementById("video");
+const ipcam = document.getElementById("ipcam");
+const IPCAM_URL = "http://192.168.0.12:4747/video"; // Cambia esta IP según tu red
+
+let currentStream = null;
+
+async function iniciarCamara() {
+    if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+        currentStream = null;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        currentStream = stream;
+        video.classList.remove("d-none");
+        ipcam.classList.add("d-none");
+    } catch (error) {
+        ipcam.src = IPCAM_URL;
+        ipcam.classList.remove("d-none");
+        video.classList.add("d-none");
+    }
+}
+window.addEventListener("load", iniciarCamara);
+
+document.getElementById("btnRefrescarCamara").addEventListener("click", function() {
+    iniciarCamara();
+});
+
+
+/* =========================
+   TOMAR FOTO
+========================= */
+function capturarFoto() {
+    let modalGuardandoFoto = new bootstrap.Modal(document.getElementById('modalGuardandoFoto'));
+    modalGuardandoFoto.show();
+
+    setTimeout(() => {
+        const canvas = document.getElementById("canvas");
+        const context = canvas.getContext("2d");
+
+        if (!video.classList.contains("d-none")) {
+            context.drawImage(video, 0, 0, 320, 240);
+        } else if (!ipcam.classList.contains("d-none")) {
+            context.drawImage(ipcam, 0, 0, 320, 240);
+        }
+
+        const dataURL = canvas.toDataURL("image/png");
+        document.getElementById("fotografia").value = dataURL;
+
+        modalGuardandoFoto.hide();
+
+        let modalFoto = new bootstrap.Modal(document.getElementById('modalFoto'));
+        modalFoto.show();
+
+        setTimeout(() => {
+            modalFoto.hide();
+        }, 1500);
+    }, 600);
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    document.getElementById("btnTomarFoto").addEventListener("click", capturarFoto);
+});
+
+
+/* =========================
+   MODAL GUARDANDO AL ENVIAR
+========================= */
+document.getElementById("formRegistro").addEventListener("submit", function(e) {
+    if (!document.getElementById("fotografia").value) {
+        e.preventDefault();
+        alert("Debe capturar la fotografía antes de registrar.");
+        return;
+    }
+
+    if (!document.getElementById("firmaInput").value) {
+        e.preventDefault();
+        alert("Por favor, firme en el recuadro antes de registrar.");
+        return;
+    }
+
+    let modal = new bootstrap.Modal(document.getElementById('modalGuardando'));
+    modal.show();
+});
+
+
+/* =========================
+   FIRMA DIGITAL
+========================= */
+const firmaCanvas = document.getElementById('firmaCanvas');
+const firmaInput = document.getElementById('firmaInput');
+const limpiarBtn = document.getElementById('limpiarFirma');
+
+let dibujando = false;
+let lastX = 0, lastY = 0;
+
+function guardarFirma() {
+    firmaInput.value = firmaCanvas.toDataURL('image/png');
+}
+
+firmaCanvas.addEventListener('mousedown', function(e) {
+    dibujando = true;
+    [lastX, lastY] = [e.offsetX, e.offsetY];
+});
+
+firmaCanvas.addEventListener('mousemove', function(e) {
+    if (!dibujando) return;
+    const ctx = firmaCanvas.getContext('2d');
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#222';
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(e.offsetX, e.offsetY);
+    ctx.stroke();
+    [lastX, lastY] = [e.offsetX, e.offsetY];
+    guardarFirma();
+});
+
+firmaCanvas.addEventListener('mouseup', function() { dibujando = false; guardarFirma(); });
+firmaCanvas.addEventListener('mouseleave', function() { dibujando = false; });
+
+firmaCanvas.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    dibujando = true;
+    const rect = firmaCanvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    lastX = touch.clientX - rect.left;
+    lastY = touch.clientY - rect.top;
+});
+
+firmaCanvas.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    if (!dibujando) return;
+    const ctx = firmaCanvas.getContext('2d');
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#222';
+
+    const rect = firmaCanvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+
+    lastX = x;
+    lastY = y;
+    guardarFirma();
+});
+
+firmaCanvas.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    dibujando = false;
+    guardarFirma();
+});
+
+limpiarBtn.addEventListener('click', function() {
+    const ctx = firmaCanvas.getContext('2d');
+    ctx.clearRect(0, 0, firmaCanvas.width, firmaCanvas.height);
+    firmaInput.value = '';
+});
+
+
+function restaurarFirmaEnCanvas() {
+    const dataURL = firmaInput.value;
+    if (!dataURL) return;
+
+    const img = new Image();
+    img.onload = function() {
+        const ctx = firmaCanvas.getContext("2d");
+        ctx.clearRect(0, 0, firmaCanvas.width, firmaCanvas.height);
+        ctx.drawImage(img, 0, 0, firmaCanvas.width, firmaCanvas.height);
+    };
+    img.src = dataURL;
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    restaurarFirmaEnCanvas();
+});
+
+
+/* =========================
+   SI VIENE "RETAKE PHOTO"
+   -> vaciar foto + enfocar botón
+========================= */
+{% if retake_photo %}
+document.addEventListener("DOMContentLoaded", function(){
+
+    document.getElementById("fotografia").value = "";
+    document.getElementById("btnTomarFoto").focus();
+
+});
+{% endif %}
+/* =========================
+   CARGAR JORNADAS DINÁMICAMENTE
+========================= */
+async function actualizarJornadas() {
+    const sedeSelect = document.querySelector('select[name="sede"]');
+    const carreraSelect = document.querySelector('select[name="carrera"]');
+    const jornadaSelect = document.querySelector('select[name="id_jornada"]');
+    if (!sedeSelect || !carreraSelect || !jornadaSelect) return;
+
+    const id_sede = sedeSelect.value;
+    const carrera = carreraSelect.value;
+
+    // limpiar
+    jornadaSelect.innerHTML = '<option value="">Seleccione...</option>';
+
+    if (!id_sede || !carrera) return;
+
+    try {
+        const resp = await fetch(`/api/jornadas_por_sede_carrera?id_sede=${encodeURIComponent(id_sede)}&carrera=${encodeURIComponent(carrera)}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const selectedJ = '{{ form_data.id_jornada if form_data is defined else "" }}';
+        data.jornadas.forEach(j => {
+            const opt = document.createElement('option');
+            opt.value = j.id_jornada;
+            opt.textContent = j.nombre;
+            if (selectedJ && selectedJ === String(j.id_jornada)) opt.selected = true;
+            jornadaSelect.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('Error cargando jornadas:', e);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const sedeSelect = document.querySelector('select[name="sede"]');
+    const carreraSelect = document.querySelector('select[name="carrera"]');
+    if (sedeSelect) sedeSelect.addEventListener('change', actualizarJornadas);
+    if (carreraSelect) carreraSelect.addEventListener('change', actualizarJornadas);
+    // cargar si ya hay valores seleccionados
+    actualizarJornadas();
+});
+
+
+/* =========================
+   para seleccionar sede
+========================= */
+document.getElementById("sede")
+.addEventListener("change", function () {
+
+    let idSede = this.value;
+
+    let jornadaSelect =
+        document.getElementById("jornada");
+
+    jornadaSelect.innerHTML =
+        '<option value="">Cargando...</option>';
+
+    fetch(`/obtener_jornadas/${idSede}`)
+
+        .then(response => response.json())
+
+        .then(data => {
+
+            jornadaSelect.innerHTML =
+                '<option value="">Seleccione...</option>';
+
+            data.forEach(jornada => {
+
+                jornadaSelect.innerHTML += `
+                    <option value="${jornada.id_jornada}">
+                        ${jornada.nombre}
+                    </option>
+                `;
+            });
+
+        });
+
+});
+
+/* =========================
+   para mostrar días de la jornada
+========================= */
+document.getElementById("jornada").addEventListener("change", function () {
+
+    let texto =
+        this.options[this.selectedIndex].text.trim();
+
+    let dias = document.getElementById("dias");
+
+    if (
+        texto === "Matutina" ||
+        texto === "Vespertina" ||
+        texto === "Nocturna"
+    ) {
+        dias.value = "Lunes a Viernes";
+    }
+    else if (texto === "Sabado") {
+        dias.value = "Sábado";
+    }
+    else if (texto === "Domingo") {
+        dias.value = "Domingo";
+    }
+    else {
+        dias.value = "";
+    }
+
+});
+
+</script>
+
+{% endblock %}

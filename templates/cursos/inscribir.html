@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="card shadow">
+        <div class="card-header bg-success text-white">
+            <h4 class="mb-0">Inscribir estudiantes al curso</h4>
+        </div>
+        <div class="card-body">
+            <p><strong>Curso:</strong> {{ curso[1] }}</p>
+            <p><strong>Carrera:</strong> {{ curso[2] }}</p>
+            <p><strong>Sede:</strong> {{ curso[3] }}</p>
+            {% if selected_section %}
+                {% if catedratico_info %}
+                <p><strong>Catedrático asignado:</strong> {{ catedratico_info.nombre }}</p>
+                <p><strong>Jornada:</strong> {{ catedratico_info.jornada }}</p>
+                {% else %}
+                <p><strong>Catedrático asignado:</strong> Aún no hay catedrático asignado para esta sección.</p>
+                {% endif %}
+            {% else %}
+                <p><strong>Catedrático asignado:</strong> Seleccione una sección para ver el docente.</p>
+            {% endif %}
+
+            <form method="GET" class="mb-4">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label">Sección</label>
+                        <select name="seccion" class="form-select" required onchange="this.form.submit()">
+                            <option value="">Seleccione una sección</option>
+                            {% for sec in section_options %}
+                            <option value="{{ sec }}" {% if sec == selected_section %}selected{% endif %}>{{ sec }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </form>
+
+            {% if selected_section %}
+            {% if skipped %}
+            <div class="alert alert-warning">
+                <strong>Omitidos:</strong>
+                <ul class="mb-0">
+                    {% for s in skipped %}
+                    <li>{{ s[1] or ('ID ' ~ s[0]) }} - {% if s[2] == 'no_role' %}No tiene rol de estudiante activo{% elif s[2] == 'no_asignacion' %}Asignación no encontrada{% elif s[2] == 'jornada_mismatch' %}Jornada incompatible con la asignación{% elif s[2] == 'insert_error' %}Error al guardar inscripción{% else %}Omitido (motivo desconocido){% endif %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            <form method="POST">
+                <input type="hidden" name="seccion" value="{{ selected_section }}">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Seleccionar</th>
+                            <th>Carnet</th>
+                            <th>Nombre</th>
+                            <th>Correo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in estudiantes %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" name="estudiantes" value="{{ e[0] }}"
+                                {% if e[0] in inscritos %}checked{% endif %}>
+                            </td>
+                            <td>{{ e[1] }}</td>
+                            <td>{{ e[2] }} {{ e[3] }}</td>
+                            <td>{{ e[4] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <button type="submit" class="btn btn-primary">Guardar inscripciones</button>
+                <a href="{{ url_for('listar_cursos') }}" class="btn btn-secondary">Volver</a>
+            </form>
+            {% else %}
+            <div class="alert alert-info" role="alert">
+                Seleccione una sección para cargar los estudiantes.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

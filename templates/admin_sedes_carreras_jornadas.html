@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="card shadow">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">Sedes - Carreras - Jornadas</h4>
+            <a href="{{ url_for('admin_scj_nuevo') }}" class="btn btn-primary">Nuevo Mapping</a>
+        </div>
+        <div class="card-body">
+            {% if rows %}
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Sede</th>
+                        <th>Carrera</th>
+                        <th>Jornada</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                    <tr>
+                        <td>{{ r.sede }}</td>
+                        <td>{{ r.carrera }}</td>
+                        <td>{{ r.jornada }}</td>
+                        <td>
+                            <a href="{{ url_for('admin_scj_editar', id_scj=r.id_sede_carrera_jornada) }}" class="btn btn-sm btn-outline-secondary">Editar</a>
+                            <form method="POST" action="{{ url_for('admin_scj_eliminar', id_scj=r.id_sede_carrera_jornada) }}" style="display:inline" onsubmit="return confirm('Eliminar mapping?');">
+                                <button class="btn btn-sm btn-danger">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="alert alert-info">No hay mappings registrados.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0"><i class="bi bi-book-fill"></i> {{ curso.nombre }}</h2>
+            <a href="{{ url_for('dashboard_estudiante') }}" class="btn btn-sm btn-secondary mt-2">
+                <i class="bi bi-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <!-- Info del Curso -->
+        <div class="col-lg-6 mb-3">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h6 class="text-muted">Información del Curso</h6>
+                    <p><strong>Código:</strong> <code>{{ curso.codigo or 'N/A' }}</code></p>
+                    <p><strong>Carrera:</strong> {{ curso.carrera or 'N/A' }}</p>
+                    <p><strong>Créditos:</strong> <span class="badge bg-success">{{ curso.creditos or 0 }}</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estadísticas -->
+        <div class="col-lg-6 mb-3">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h6 class="text-muted mb-3">Mi Asistencia</h6>
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <h5 class="mb-0">{{ stats.porcentaje }}%</h5>
+                            <small class="text-muted">Porcentaje</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <h5 class="mb-0">{{ stats.presentes }}/{{ stats.total }}</h5>
+                            <small class="text-muted">Presentes</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Horarios -->
+    {% if horarios %}
+    <div class="card shadow mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="bi bi-calendar"></i> Horarios de Clase</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Día</th>
+                        <th>Hora Inicio</th>
+                        <th>Hora Fin</th>
+                        <th>Salón</th>
+                        <th>Jornada</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in horarios %}
+                    <tr>
+                        <td><strong>{{ h.dia_semana|title }}</strong></td>
+                        <td>{{ h.hora_inicio }}</td>
+                        <td>{{ h.hora_fin }}</td>
+                        <td>{{ h.salon }}</td>
+                        <td><span class="badge bg-warning">{{ h.jornada }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Registro de Asistencia -->
+    <div class="card shadow">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-clipboard-check"></i> Registro de Asistencia</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Hora Entrada</th>
+                        <th>Estado</th>
+                        <th>Método</th>
+                        <th>Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if asistencias %}
+                        {% for a in asistencias %}
+                        <tr>
+                            <td>{{ a.fecha.strftime('%d/%m/%Y') if a.fecha else '-' }}</td>
+                            <td>{{ a.hora_entrada.strftime('%H:%M') if a.hora_entrada else '-' }}</td>
+                            <td>
+                                {% if a.estado == 'presente' %}
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Presente</span>
+                                {% elif a.estado == 'ausente' %}
+                                    <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Ausente</span>
+                                {% elif a.estado == 'tarde' %}
+                                    <span class="badge bg-warning"><i class="bi bi-exclamation-circle"></i> Tarde</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if a.metodo_registro == 'facial' %}
+                                    <i class="bi bi-camera"></i> Facial
+                                {% else %}
+                                    <i class="bi bi-pencil"></i> Manual
+                                {% endif %}
+                            </td>
+                            <td><small class="text-muted">{{ a.observaciones or '-' }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox"></i> Sin registros de asistencia
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

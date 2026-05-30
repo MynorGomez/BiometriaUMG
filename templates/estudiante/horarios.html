@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0"><i class="bi bi-calendar3"></i> Mi Horario</h2>
+        <a href="{{ url_for('dashboard_estudiante') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+
+    <div class="row">
+        {% for dia in dias_semana %}
+        {% if horarios_organizados[dia] %}
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0 text-capitalize">{{ dia|title }}</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for h in horarios_organizados[dia] %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">{{ h.curso }}</h6>
+                                    <p class="mb-1 text-muted">
+                                        <strong>Carrera:</strong> {{ h.carrera }}<br>
+                                        <strong>Sección:</strong> {{ h.seccion }}
+                                    </p>
+                                    <small class="text-secondary">
+                                        <i class="bi bi-geo-alt"></i> Salón: {{ h.salon }}<br>
+                                        <i class="bi bi-clock"></i> {{ h.hora_inicio }} - {{ h.hora_fin }}
+                                    </small>
+                                </div>
+                                <span class="badge bg-warning">{{ h.jornada }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    {% if not horarios_organizados|length %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> No tienes horarios asignados
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

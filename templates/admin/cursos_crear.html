@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-plus-circle"></i> Crear Nuevo Curso
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_crear_curso') }}">
+                        <div class="mb-3">
+                            <label for="nombre" class="form-label"><strong>Nombre del Curso *</strong></label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" 
+                                   value="{{ form_data.get('nombre', '') }}" required>
+                            <small class="form-text text-muted">Ej: Programación I, Base de Datos II</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="codigo" class="form-label"><strong>Código del Curso *</strong></label>
+                            <input type="text" class="form-control" id="codigo" name="codigo" 
+                                   value="{{ form_data.get('codigo', '') }}" required>
+                            <small class="form-text text-muted">Ej: SIS101, BDD102</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="creditos" class="form-label"><strong>Créditos</strong></label>
+                            <input type="number" class="form-control" id="creditos" name="creditos" 
+                                   value="{{ form_data.get('creditos', '0') }}" min="0">
+                            <small class="form-text text-muted">Cantidad de créditos del curso</small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="id_sede_carrera" class="form-label"><strong>Sede - Carrera *</strong></label>
+                                    <select class="form-control" id="id_sede_carrera" name="id_sede_carrera" required>
+                                        <option value="">-- Seleccionar Sede - Carrera --</option>
+                                        {% for opcion in sede_carrera_options %}
+                                            <option value="{{ opcion.id_sede_carrera }}" 
+                                                    {% if form_data.get('id_sede_carrera')|string == opcion.id_sede_carrera|string %}selected{% endif %}>
+                                                {{ opcion.display_name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="id_jornada" class="form-label"><strong>Jornada *</strong></label>
+                                    <select class="form-control" id="id_jornada" name="id_jornada" required>
+                                        <option value="">-- Seleccionar Jornada --</option>
+                                        {% for opcion in jornada_sede_carrera_options %}
+                                            <option value="{{ opcion.id_jornada }}" 
+                                                    data-sede-carrera="{{ opcion.id_sede_carrera }}"
+                                                    {% if form_data.get('id_jornada')|string == opcion.id_jornada|string and form_data.get('id_sede_carrera')|string == opcion.id_sede_carrera|string %}selected{% endif %}>
+                                                {{ opcion.display_name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="form-text text-muted">Las jornadas se filtran según la sede y carrera seleccionadas</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Guardar Curso
+                            </button>
+                            <a href="{{ url_for('admin_listar_cursos') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('id_sede_carrera').addEventListener('change', function() {
+    const selectedSedeCarrera = this.value;
+    const jornadaSelect = document.getElementById('id_jornada');
+    const options = jornadaSelect.querySelectorAll('option');
+    
+    // Reset jornada selection
+    jornadaSelect.value = '';
+    
+    // Show/hide options based on selected sede-carrera
+    options.forEach(option => {
+        if (option.value === '') {
+            option.style.display = 'block'; // Always show empty option
+        } else if (option.getAttribute('data-sede-carrera') === selectedSedeCarrera) {
+            option.style.display = 'block';
+        } else {
+            option.style.display = 'none';
+        }
+    });
+});
+
+// Initial filter on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const sedeCarreraSelect = document.getElementById('id_sede_carrera');
+    if (sedeCarreraSelect.value) {
+        sedeCarreraSelect.dispatchEvent(new Event('change'));
+    }
+});
+</script>
+{% endblock %}

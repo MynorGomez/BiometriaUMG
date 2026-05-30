@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Camera Mappings</h2>
+<a class="btn btn-primary mb-3" href="{{ url_for('admin_camera_mappings_nuevo') }}">Nuevo mapping</a>
+<table class="table table-sm">
+<thead><tr><th>ID</th><th>Cámara</th><th>Sede</th><th>Carrera</th><th>Sección</th><th>Salón</th><th>Jornada</th><th>Activo</th><th>Acciones</th></tr></thead>
+<tbody>
+{% for m in maps %}
+<tr>
+<td>{{ m.id }}</td>
+<td>{{ m.cam_id }} - {{ m.cam_nombre or '' }}</td>
+<td>{{ m.sede_nombre or '-' }}</td>
+<td>{{ m.carrera_nombre or '-' }}</td>
+<td>{{ m.seccion_nombre or '-' }}</td>
+<td>{{ m.salon_nombre or '-' }}</td>
+<td>{{ m.jornada_nombre or m.id_jornada or '-' }}</td>
+<td>{{ 'Sí' if m.activo==1 else 'No' }}</td>
+<td>
+<form method="post" action="{{ url_for('admin_camera_mappings_eliminar', id=m.id) }}" onsubmit="return confirm('Eliminar mapping?');">
+<button class="btn btn-sm btn-danger">Eliminar</button>
+</form>
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+    .monitor-wrap {
+        width: 100%;
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+    }
+
+    .monitor-left {
+        flex: 2;
+        min-width: 520px;
+    }
+
+    .monitor-right {
+        flex: 1;
+        min-width: 320px;
+        max-width: 420px;
+    }
+
+    .video-box {
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #fff;
+    }
+
+        .video-box img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+    .card-monitor {
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        padding: 16px;
+        background: #fff;
+        margin-bottom: 15px;
+    }
+
+    .ok {
+        color: #0a7;
+        font-weight: bold;
+    }
+
+    .no {
+        color: #c22;
+        font-weight: bold;
+    }
+
+    .rowm {
+        margin: 8px 0;
+    }
+
+    .labelm {
+        color: #666;
+        font-size: 12px;
+    }
+
+    .valm {
+        font-size: 16px;
+    }
+
+    @media (max-width: 1100px) {
+        .monitor-wrap {
+            flex-direction: column;
+        }
+
+        .monitor-left, .monitor-right {
+            min-width: 100%;
+            max-width: 100%;
+        }
+    }
+</style>
+
+<div class="monitor-wrap">
+
+    <!-- IZQUIERDA: VIDEO -->
+    <div class="monitor-left">
+        <div class="video-box">
+            <img src="/video_feed/{{ cam_id }}" alt="Video en vivo">
+        </div>
+    </div>
+
+    <!-- DERECHA: PANEL -->
+    <div class="monitor-right">
+
+        <!-- 🔵 PASO 8: ESTUDIANTE -->
+        <h2>Último resultado</h2>
+
+        <div class="card-monitor">
+            <div id="estado" class="no mb-2">Esperando...</div>
+
+            <div class="rowm"><div class="labelm">ID Persona</div><div id="id_persona" class="valm">-</div></div>
+            <div class="rowm"><div class="labelm">Nombres</div><div id="nombre" class="valm">-</div></div>
+            <div class="rowm"><div class="labelm">Apellidos</div><div id="apellido" class="valm">-</div></div>
+            <div class="rowm"><div class="labelm">Carnet</div><div id="carnet" class="valm">-</div></div>
+            <div class="rowm"><div class="labelm">Correo</div><div id="correo" class="valm">-</div></div>
+            <div class="rowm"><div class="labelm">Distancia</div><div id="dist" class="valm">-</div></div>
+            <div class="rowm"><div class="labelm">Fecha/Hora</div><div id="ts" class="valm">-</div></div>
+
+            <hr>
+
+            <div class="rowm">
+                <div class="labelm">Horarios</div>
+                <div id="horarios" class="valm">-</div>
+            </div>
+        </div>
+
+        <!-- 🔵 PASO 9: CATEDRÁTICO -->
+        <h2>📘 Catedrático detectado</h2>
+
+        <div class="card-monitor">
+            <div id="estado_prof" class="no mb-2">Esperando...</div>
+
+            <div class="rowm">
+                <div class="labelm">Nombre</div>
+                <div id="p_nombre" class="valm">-</div>
+            </div>
+
+            <div class="rowm">
+                <div class="labelm">Sede</div>
+                <div id="p_sede" class="valm">-</div>
+            </div>
+
+            <div class="rowm">
+                <div class="labelm">Jornada</div>
+                <div id="p_jornada" class="valm">-</div>
+            </div>
+
+            <div class="rowm">
+                <div class="labelm">Horario</div>
+                <div id="p_horario" class="valm">-</div>
+            </div>
+
+            <div class="rowm">
+                <div class="labelm">Cursos</div>
+                <div id="p_cursos" class="valm">-</div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+
+async function refresh() {
+  try {
+    const res = await fetch("/last_match/{{ cam_id }}", { cache: "no-store" });
+    const data = await res.json();
+
+    const estado = document.getElementById("estado");
+
+    if (data.matched) {
+      estado.textContent = "RECONOCIDO";
+      estado.className = "ok mb-2";
+    } else {
+      estado.textContent = "NO RECONOCIDO";
+      estado.className = "no mb-2";
+    }
+
+    document.getElementById("id_persona").textContent = data.id_persona ?? "-";
+    document.getElementById("nombre").textContent = data.nombre ?? "-";
+    document.getElementById("apellido").textContent = data.apellido ?? "-";
+    document.getElementById("carnet").textContent = data.carnet ?? "-";
+    document.getElementById("correo").textContent = data.correo ?? "-";
+    document.getElementById("dist").textContent = data.dist ?? "-";
+    document.getElementById("ts").textContent = data.timestamp ?? "-";
+
+    const horariosDiv = document.getElementById("horarios");
+
+    if (data.horarios && data.horarios.length > 0) {
+      let html = "";
+
+      data.horarios.forEach(h => {
+        html += `
+          <div style="border:1px solid #ccc; border-radius:8px; padding:10px; margin-top:10px;">
+            <div><b>Curso:</b> ${h.curso || "-"}</div>
+            <div><b>Salón:</b> ${h.salon || "-"}</div>
+            <div><b>Jornada:</b> ${h.jornada || "-"}</div>
+            <div><b>Horario:</b> ${h.hora_inicio || "-"} - ${h.hora_fin || "-"}</div>
+          </div>
+        `;
+      });
+
+      horariosDiv.innerHTML = html;
+    } else {
+      horariosDiv.innerHTML = "Sin horarios";
+    }
+
+  } catch (e) {
+    console.log(e);
+  }
+}
+
+setInterval(refresh, 500);
+refresh();
+
+
+// 🔵 PASO 9: CATEDRÁTICO
+async function refreshTeacher() {
+  try {
+    const res = await fetch("/last_teacher_match/{{ cam_id }}");
+    const data = await res.json();
+
+    const estado = document.getElementById("estado_prof");
+
+    if (!data.matched) {
+      estado.textContent = "ESPERANDO...";
+      estado.className = "no mb-2";
+      return;
+    }
+
+    estado.textContent = "RECONOCIDO";
+    estado.className = "ok mb-2";
+
+    document.getElementById("p_nombre").textContent = data.nombre ?? "-";
+    document.getElementById("p_sede").textContent = data.sede ?? "-";
+    document.getElementById("p_jornada").textContent = data.jornada ?? "-";
+    document.getElementById("p_horario").textContent = data.horario ?? "-";
+
+    document.getElementById("p_cursos").innerHTML =
+      (data.cursos || []).map(c => `• ${c}`).join("<br>");
+
+  } catch (e) {
+    console.log(e);
+  }
+}
+
+setInterval(refreshTeacher, 1000);
+refreshTeacher();
+
+</script>
+
+{% endblock %}

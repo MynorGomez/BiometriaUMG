@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0"><i class="bi bi-book-fill"></i> {{ curso.nombre }}</h2>
+            <a href="{{ url_for('cursos_list') }}" class="btn btn-sm btn-secondary mt-2">
+                <i class="bi bi-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <p><strong>Código:</strong> <code>{{ curso.codigo or 'N/A' }}</code></p>
+                    <p><strong>Carrera:</strong> {{ curso.carrera or 'N/A' }}</p>
+                    <p><strong>Créditos:</strong> <span class="badge bg-success">{{ curso.creditos or 0 }}</span></p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6>Estadísticas</h6>
+                    <p><strong>Estudiantes Inscritos:</strong> <span class="badge bg-primary">{{ stats|length }}</span></p>
+                    <p><strong>Horarios:</strong> <span class="badge bg-info">{{ horarios|length }}</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Horarios -->
+    {% if horarios %}
+    <div class="card shadow mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="bi bi-calendar"></i> Horarios</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Día</th>
+                        <th>Hora Inicio</th>
+                        <th>Hora Fin</th>
+                        <th>Salón</th>
+                        <th>Jornada</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in horarios %}
+                    <tr>
+                        <td><strong>{{ h.dia_semana|title }}</strong></td>
+                        <td>{{ h.hora_inicio }}</td>
+                        <td>{{ h.hora_fin }}</td>
+                        <td>{{ h.salon }}</td>
+                        <td><span class="badge bg-warning">{{ h.jornada }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Asistencia -->
+    <div class="card shadow">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-clipboard-check"></i> Estadísticas de Asistencia</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Estudiante</th>
+                        <th>Total Clases</th>
+                        <th>Presentes</th>
+                        <th>Ausentes</th>
+                        <th>Tardes</th>
+                        <th>Porcentaje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if stats %}
+                        {% for s in stats %}
+                        <tr>
+                            <td>{{ s.nombre }} {{ s.apellido }}</td>
+                            <td><span class="badge bg-primary">{{ s.total_clases or 0 }}</span></td>
+                            <td><span class="badge bg-success">{{ s.presentes or 0 }}</span></td>
+                            <td><span class="badge bg-danger">{{ s.ausentes or 0 }}</span></td>
+                            <td><span class="badge bg-warning">{{ s.tardes or 0 }}</span></td>
+                            <td>
+                                {% if s.porcentaje %}
+                                    {{ s.porcentaje }}%
+                                    {% if s.porcentaje >= 80 %}
+                                        <span class="badge bg-success">Bueno</span>
+                                    {% elif s.porcentaje >= 60 %}
+                                        <span class="badge bg-warning">Regular</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Bajo</span>
+                                    {% endif %}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox"></i> Sin datos de asistencia
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
