@@ -33,44 +33,46 @@ def register_docente_routes(app):
         if 'id_rol' in rp_cols:
             activo_clause = get_active_role_clause('r')
             cursor.execute(f"""
-                SELECT DISTINCT c.id_curso,
-                       c.nombre AS nombre_curso,
-                       ca.nombre AS carrera,
-                       s.nombre AS seccion
-                FROM cursos c
-                JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
-                JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
-                JOIN roles ro ON r.id_rol = ro.id_rol
-                JOIN secciones s ON ac.id_seccion = s.id_seccion
-                JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
-                JOIN carreras ca ON sc.id_carrera = ca.id_carrera
-                WHERE r.id_persona = %s
-                  AND ro.nombre = 'catedratico'
-                  {activo_clause}
-                ORDER BY c.nombre
-            """, (id_catedratico,))
-        else:
-            cursor.execute("""
-                SELECT DISTINCT c.id_curso,
-                       c.nombre AS nombre_curso,
-                       ca.nombre AS carrera,
-                       s.nombre AS seccion
-                FROM cursos c
-                JOIN asignacion_cursos ac ON c.id_curso = ac.id_curso
-                JOIN roles_persona r ON ac.id_rol_persona = r.id_rol_persona
-                JOIN secciones s ON ac.id_seccion = s.id_seccion
-                JOIN sede_carrera sc ON c.id_sede_carrera = sc.id_sede_carrera
-                JOIN carreras ca ON sc.id_carrera = ca.id_carrera
-                WHERE r.id_persona = %s
-                  AND r.tipo_persona = 'catedratico'
-                  AND r.activo = 1
-                ORDER BY c.nombre
-            """, (id_catedratico,))
+    SELECT DISTINCT
+           c.id_curso,
+           c.nombre AS nombre_curso,
+           c.codigo,
+           ca.nombre AS carrera,
+           s.nombre AS seccion,
+           sa.nombre AS salon,
+           sed.nombre AS sede,
+           j.nombre AS jornada,
+           ac.ciclo,
+           ac.anio
+    FROM cursos c
+    JOIN asignacion_cursos ac
+        ON c.id_curso = ac.id_curso
+    JOIN roles_persona r
+        ON ac.id_rol_persona = r.id_rol_persona
+    JOIN roles ro
+        ON r.id_rol = ro.id_rol
+    JOIN secciones s
+        ON ac.id_seccion = s.id_seccion
+    JOIN sede_carrera sc
+        ON c.id_sede_carrera = sc.id_sede_carrera
+    JOIN carreras ca
+        ON sc.id_carrera = ca.id_carrera
+    LEFT JOIN salones sa
+        ON ac.id_salon = sa.id_salon
+    LEFT JOIN sedes sed
+        ON sa.id_sede = sed.id_sede
+    LEFT JOIN jornadas j
+        ON ac.id_jornada = j.id_jornada
+    WHERE r.id_persona = %s
+      AND ro.nombre = 'catedratico'
+      {activo_clause}
+    ORDER BY c.nombre
+""", (id_catedratico,))
         cursos = cursor.fetchall()
         cursor.close()
         conn.close()
-        return render_template('catedratico/mis_cursos.html', cursos=cursos, usuario=usuario, fecha_hoy=date.today())
-
+        return render_template('catedratico/mis_cursos.html', cursos=cursos, usuario=usuario)
+# para paneñl del docente, mostrar cursos asignados, ver asistencia, confirmar asistencia
     @app.route('/mis_cursos')
     def mis_cursos():
         if session.get('rol') != 'catedratico':
@@ -200,7 +202,7 @@ def register_docente_routes(app):
             flash('No tiene acceso a este curso.', 'danger')
             return redirect(url_for('mis_cursos'))
         cursor.execute("""
-            SELECT p.id_persona, p.nombre, p.apellido, COALESCE(p.correo_institucional, p.correo_personal) AS correo, p.foto, p.id_persona AS carnet
+            SELECT p.id_persona, p.nombre, p.apellido, COALESCE(p.correo_institucional, p.correo_personal) AS correo, p.foto, p.carnet
             FROM inscripciones i
             JOIN roles_persona r ON i.id_rol_persona = r.id_rol_persona
             JOIN personas p ON r.id_persona = p.id_persona
@@ -212,10 +214,10 @@ def register_docente_routes(app):
         estudiantes = []
         for e in estudiantes_db:
             cursor.execute("""
-                SELECT ubicacion, tipo_registro, hora
-                FROM registros_entrada
-                WHERE id_persona = %s AND fecha = %s
-                ORDER BY hora DESC
+                SELECT id_acceso, tipo_acceso,fecha_hora, resultado
+                FROM accesos_biometricos
+                WHERE id_persona = %s AND date(fecha_hora) = %s
+                ORDER BY fecha_hora DESC
                 LIMIT 1
             """, (e['id_persona'], fecha_hoy))
             registro = cursor.fetchone()
@@ -231,8 +233,9 @@ def register_docente_routes(app):
                 'carnet': e['carnet'],
                 'foto': foto_base64,
                 'presente': presente,
-                'ubicacion': registro['ubicacion'] if registro else None,
-                'hora': registro['hora'] if registro else None
+                'tipo_acceso': registro['tipo_acceso'] if registro else None,
+                'fecha_hora': registro['fecha_hora'] if registro else None,
+                'resultado': registro['resultado'] if registro else None
             })
         cursor.close()
         conexion.close()
@@ -339,11 +342,7 @@ def register_docente_routes(app):
             docente = cursor.fetchone()
 
             cursor.execute("""
-                SELECT p.id_persona,
-                       p.nombre,
-                       p.apellido,
-                       COALESCE(p.correo_institucional, p.correo_personal) AS correo,
-                       p.id_persona AS carnet
+                SELECT p.id_persona, p.nombre, p.apellido, COALESCE(p.correo_institucional, p.correo_personal) AS correo, p.carnet
                 FROM inscripciones i
                 JOIN roles_persona r ON i.id_rol_persona = r.id_rol_persona
                 JOIN personas p ON r.id_persona = p.id_persona
